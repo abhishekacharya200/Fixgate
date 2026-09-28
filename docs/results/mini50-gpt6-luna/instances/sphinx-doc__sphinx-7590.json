@@ -1,0 +1,112 @@
+{
+ "task_id": "sphinx-doc__sphinx-7590",
+ "issue": {
+  "repo": "sphinx-doc/sphinx",
+  "title": "C++ User Defined Literals not supported",
+  "body": "C++ User Defined Literals not supported\nThe code as below\r\n\r\n```cpp\r\nnamespace units::si {\r\n\r\ninline constexpr auto planck_constant = 6.62607015e-34q_J * 1q_s;\r\n\r\n}\r\n```\r\n\r\ncauses the following error:\r\n\r\n```\r\nWARNING: Invalid definition: Expected end of definition. [error at 58]\r\n[build]   constexpr auto units::si::planck_constant = 6.62607015e-34q_J * 1q_s\r\n[build]   ----------------------------------------------------------^\r\n```\r\n\r\nAccording to <https://github.com/sphinx-doc/sphinx/blob/3.x/sphinx/domains/cpp.py#L4770> Sphinx seems to not have features for UDLs. Could you please add those?",
+  "number": null,
+  "url": null,
+  "labels": [],
+  "comments": [],
+  "author": null,
+  "ref": "sphinx-doc__sphinx-7590"
+ },
+ "outcome": {
+  "category": "patch_ready",
+  "subcategory": "reproduced",
+  "phase": "verify",
+  "message": "Consume an identifier suffix immediately following numeric literals so C++ user-defined numeric literals parse as a single literal.",
+  "span_id": null,
+  "details": {
+   "warnings": []
+  },
+  "blame": "none"
+ },
+ "triage": {
+  "kind": "feature",
+  "actionable": true,
+  "needs_more_info": false,
+  "severity": "low",
+  "component": "C++ domain/parser",
+  "summary": "Add C++ user-defined literal support to the C++ domain parser so declarations using literal suffixes parse correctly.",
+  "suggested_labels": [
+   "type: feature",
+   "area: cpp"
+  ],
+  "confidence": 0.97,
+  "evidence": "The reported C++ declaration fails with \u201cExpected end of definition\u201d at the user-defined literal suffix; the reporter requests support for C++ UDLs."
+ },
+ "reproduction": {
+  "status": "verified",
+  "command": "python /tmp/fixgate/repro.py",
+  "script": "from sphinx.domains.cpp import DefinitionParser\nclass Config:\n    cpp_id_attributes=[]\n    cpp_paren_attributes=[]\nfor expr in ('6.62607015e-34q_J', '1q_s'):\n    parser=DefinitionParser(expr, location=None, config=Config())\n    parser.allowFallbackExpressionParsing=False\n    try:\n        actual=str(parser.parse_expression())\n        parser.assert_end()\n    except Exception as e:\n        actual=f'{type(e).__name__}: {e}'\n    expected=expr\n    print('actual:', actual)\n    print('expected:', expected)\n    assert actual == expected\n",
+  "exit_code": 1,
+  "output": "actual: DefinitionError: Error when parsing (type) expression.\nIf expression:\n  Invalid C++ declaration: Expected end of definition. [error at 14]\n    6.62607015e-34q_J\n    --------------^\nIf type:\n  Invalid C++ declaration: Expected identifier in nested name. [error at 0]\n    6.62607015e-34q_J\n    ^\n\nexpected: 6.62607015e-34q_J\nTraceback (most recent call last):\n  File \"/tmp/fixgate/repro.py\", line 16, in <module>\n    assert actual == expected\nAssertionError\n",
+  "explanation": "Confirmed numeric suffix literals currently leave their suffix unconsumed: parsing `6.62607015e-34q_J` fails with Expected end of definition at the suffix.",
+  "attempts": 1
+ },
+ "fix": {
+  "summary": "Consume an identifier suffix immediately following numeric literals so C++ user-defined numeric literals parse as a single literal.",
+  "root_cause": "The numeric literal parser stopped after the numeric token and standard suffix characters, leaving user-defined suffixes unconsumed and causing end-of-definition errors.",
+  "test_command": "pytest tests/test_domain_cpp.py -q",
+  "round": 1
+ },
+ "verification": {
+  "passed": true,
+  "repro_after": {
+   "exit_code": 0,
+   "output": "actual: 6.62607015e-34q_J\nexpected: 6.62607015e-34q_J\nactual: 1q_s\nexpected: 1q_s\n"
+  },
+  "tests": {
+   "command": "pytest tests/test_domain_cpp.py -q",
+   "exit_code": 0,
+   "passed": true,
+   "failures": [],
+   "baseline_exit_code": null,
+   "baseline_failures": [],
+   "new_failures": [],
+   "verdict": "passed",
+   "output": "gDeprecationWarning: nodes.Node.traverse() is obsoleted by Node.findall().\n    for toctreenode in doctree.traverse(addnodes.toctree):\n\ntests/test_domain_cpp.py: 117 warnings\n  /testbed/sphinx/builders/__init__.py:182: PendingDeprecationWarning: nodes.Node.traverse() is obsoleted by Node.findall().\n    for node in doctree.traverse(nodes.image):\n\ntests/test_domain_cpp.py: 117 warnings\n  /testbed/sphinx/builders/html/__init__.py:827: PendingDeprecationWarning: nodes.Node.traverse() is obsoleted by Node.findall().\n    for node in doctree.traverse(nodes.image):\n\ntests/test_domain_cpp.py: 117 warnings\n  /testbed/sphinx/environment/adapters/toctree.py:313: PendingDeprecationWarning: nodes.Node.traverse() is obsoleted by Node.findall().\n    for node in toc.traverse(nodes.reference):\n\ntests/test_domain_cpp.py: 135 warnings\n  /opt/miniconda3/envs/testbed/lib/python3.9/site-packages/alabaster/layout.html:114: DeprecationWarning: 'soft_unicode' has been renamed to 'soft_str'. The old name will be removed in MarkupSafe 2.1.\n    _gaq.push(['_setAllowLinker', true]);\n\ntests/test_domain_cpp.py: 135 warnings\n  /opt/miniconda3/envs/testbed/lib/python3.9/site-packages/alabaster/about.html:70: DeprecationWarning: 'soft_unicode' has been renamed to 'soft_str'. The old name will be removed in MarkupSafe 2.1.\n\ntests/test_domain_cpp.py: 135 warnings\n  /opt/miniconda3/envs/testbed/lib/python3.9/site-packages/alabaster/about.html:99: DeprecationWarning: 'soft_unicode' has been renamed to 'soft_str'. The old name will be removed in MarkupSafe 2.1.\n\ntests/test_domain_cpp.py: 135 warnings\n  /testbed/sphinx/environment/adapters/toctree.py:327: PendingDeprecationWarning: nodes.Node.traverse() is obsoleted by Node.findall().\n    for toctreenode in doctree.traverse(addnodes.toctree):\n\ntests/test_domain_cpp.py: 135 warnings\n  /opt/miniconda3/envs/testbed/lib/python3.9/site-packages/alabaster/layout.html:215: DeprecationWarning: 'soft_unicode' has been renamed to 'soft_str'. The old name will be removed in MarkupSafe 2.1.\n\ntests/test_domain_cpp.py: 135 warnings\n  /opt/miniconda3/envs/testbed/lib/python3.9/site-packages/alabaster/layout.html:238: DeprecationWarning: 'soft_unicode' has been renamed to 'soft_str'. The old name will be removed in MarkupSafe 2.1.\n\ntests/test_domain_cpp.py: 45 warnings\n  /testbed/sphinx/builders/latex/transforms.py:597: PendingDeprecationWarning: nodes.Node.traverse() is obsoleted by Node.findall().\n    for i, index in enumerate(node.traverse(addnodes.index)):\n\ntests/test_domain_cpp.py::test_build_domain_cpp_multi_decl_lookup\ntests/test_domain_cpp.py::test_build_domain_cpp_warn_template_param_qualified_name\ntests/test_domain_cpp.py::test_build_domain_cpp_backslash_ok\ntests/test_domain_cpp.py::test_build_domain_cpp_semicolon\ntests/test_domain_cpp.py::test_build_domain_cpp_anon_dup_decl\ntests/test_domain_cpp.py::test_build_domain_cpp_misuse_of_roles\ntests/test_domain_cpp.py::test_build_domain_cpp_with_add_function_parentheses_is_True\ntests/test_domain_cpp.py::test_build_domain_cpp_with_add_function_parentheses_is_False\ntests/test_domain_cpp.py::test_xref_consistency\n  <template>:33: DeprecationWarning: 'soft_unicode' has been renamed to 'soft_str'. The old name will be removed in MarkupSafe 2.1.\n\ntests/test_domain_cpp.py::test_build_domain_cpp_multi_decl_lookup\ntests/test_domain_cpp.py::test_build_domain_cpp_warn_template_param_qualified_name\ntests/test_domain_cpp.py::test_build_domain_cpp_backslash_ok\ntests/test_domain_cpp.py::test_build_domain_cpp_semicolon\ntests/test_domain_cpp.py::test_build_domain_cpp_anon_dup_decl\ntests/test_domain_cpp.py::test_build_domain_cpp_misuse_of_roles\ntests/test_domain_cpp.py::test_build_domain_cpp_with_add_function_parentheses_is_True\ntests/test_domain_cpp.py::test_build_domain_cpp_with_add_function_parentheses_is_False\ntests/test_domain_cpp.py::test_xref_consistency\n  <template>:224: DeprecationWarning: 'soft_unicode' has been renamed to 'soft_str'. The old name will be removed in MarkupSafe 2.1.\n\ntests/test_domain_cpp.py::test_build_domain_cpp_multi_decl_lookup\ntests/test_domain_cpp.py::test_build_domain_cpp_warn_template_param_qualified_name\ntests/test_domain_cpp.py::test_build_domain_cpp_backslash_ok\ntests/test_domain_cpp.py::test_build_domain_cpp_semicolon\ntests/test_domain_cpp.py::test_build_domain_cpp_anon_dup_decl\ntests/test_domain_cpp.py::test_build_domain_cpp_misuse_of_roles\ntests/test_domain_cpp.py::test_build_domain_cpp_with_add_function_parentheses_is_True\ntests/test_domain_cpp.py::test_build_domain_cpp_with_add_function_parentheses_is_False\ntests/test_domain_cpp.py::test_xref_consistency\n  <template>:386: DeprecationWarning: 'soft_unicode' has been renamed to 'soft_str'. The old name will be removed in MarkupSafe 2.1.\n\ntests/test_domain_cpp.py::test_build_domain_cpp_multi_decl_lookup\ntests/test_domain_cpp.py::test_build_domain_cpp_warn_template_param_qualified_name\ntests/test_domain_cpp.py::test_build_domain_cpp_backslash_ok\ntests/test_domain_cpp.py::test_build_domain_cpp_semicolon\ntests/test_domain_cpp.py::test_build_domain_cpp_anon_dup_decl\ntests/test_domain_cpp.py::test_build_domain_cpp_misuse_of_roles\ntests/test_domain_cpp.py::test_build_domain_cpp_with_add_function_parentheses_is_True\ntests/test_domain_cpp.py::test_build_domain_cpp_with_add_function_parentheses_is_False\ntests/test_domain_cpp.py::test_xref_consistency\n  <template>:401: DeprecationWarning: 'soft_unicode' has been renamed to 'soft_str'. The old name will be removed in MarkupSafe 2.1.\n\ntests/test_domain_cpp.py: 234 warnings\n  /testbed/sphinx/util/nodes.py:348: PendingDeprecationWarning: nodes.Node.traverse() is obsoleted by Node.findall().\n    for img in node.traverse(nodes.image):\n\ntests/test_domain_cpp.py: 234 warnings\n  /testbed/sphinx/util/nodes.py:350: PendingDeprecationWarning: nodes.Node.traverse() is obsoleted by Node.findall().\n    for raw in node.traverse(nodes.raw):\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n25 passed, 6463 warnings in 6.87s\n"
+  },
+  "policy_violations": [],
+  "problems": [],
+  "warnings": []
+ },
+ "patch": "diff --git a/sphinx/domains/cpp.py b/sphinx/domains/cpp.py\nindex fe52d881d..bc9b4647b 100644\n--- a/sphinx/domains/cpp.py\n+++ b/sphinx/domains/cpp.py\n@@ -4664,6 +4664,9 @@ class DefinitionParser(BaseParser):\n             if self.match(regex):\n                 while self.current_char in 'uUlLfF':\n                     self.pos += 1\n+                # A user-defined numeric literal consists of a number followed\n+                # immediately by an identifier suffix.\n+                self.match(re.compile(r'[a-zA-Z_][a-zA-Z0-9_]*'))\n                 return ASTNumberLiteral(self.definition[pos:self.pos])\n \n         string = self._parse_string()\n",
+ "gate_passed": true,
+ "usage": {
+  "llm_calls": 27,
+  "steps": 27,
+  "input_tokens": 301188,
+  "output_tokens": 1726,
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 0,
+  "prompt_tokens": 301188,
+  "cost_usd": 0.030982,
+  "cost_cached_estimate_usd": 0.005854,
+  "cost_basis": "cached_estimate",
+  "usage_estimated_calls": 27,
+  "wall_s": 636.49,
+  "paused_s": 0.0
+ },
+ "stats": {
+  "tool:search_code": 1,
+  "tool:read_file": 2,
+  "tool:bash": 14,
+  "tool:write_file": 1,
+  "invalid_calls": 4,
+  "tool:report_reproduction": 1,
+  "tool:edit_file": 2,
+  "tool:submit_fix": 1,
+  "blocked_commands": 0,
+  "fix_rounds": 1
+ },
+ "model": "gpt-6-luna",
+ "provider": "openai",
+ "base_commit": "3f69f85506e8d069fc18ee1f79b0c160321f6440",
+ "trace_dir": "runs/mini50-gpt6-luna/traces/sphinx-doc__sphinx-7590",
+ "approval_id": null,
+ "started_at": "2026-09-27T18:25:29+00:00",
+ "finished_at": "2026-09-27T18:36:05+00:00",
+ "patch_sha256": "6cc4b8d436c8edf01a8858b792b6cd74fcb21ff0060f9bd20c3025cb35e776f9"
+}

@@ -1,0 +1,111 @@
+{
+ "task_id": "django__django-11790",
+ "issue": {
+  "repo": "django/django",
+  "title": "AuthenticationForm's username field doesn't set maxlength HTML attribute.",
+  "body": "AuthenticationForm's username field doesn't set maxlength HTML attribute.\nDescription\n\t\nAuthenticationForm's username field doesn't render with maxlength HTML attribute anymore.\nRegression introduced in #27515 and 5ceaf14686ce626404afb6a5fbd3d8286410bf13.\n\u200bhttps://groups.google.com/forum/?utm_source=digest&utm_medium=email#!topic/django-developers/qnfSqro0DlA\n\u200bhttps://forum.djangoproject.com/t/possible-authenticationform-max-length-regression-in-django-2-1/241",
+  "number": null,
+  "url": null,
+  "labels": [],
+  "comments": [],
+  "author": null,
+  "ref": "django__django-11790"
+ },
+ "outcome": {
+  "category": "patch_ready",
+  "subcategory": "reproduced",
+  "phase": "verify",
+  "message": "Set the AuthenticationForm username widget's maxlength attribute from the field's effective max_length.",
+  "span_id": null,
+  "details": {
+   "warnings": []
+  },
+  "blame": "none"
+ },
+ "triage": {
+  "kind": "bug",
+  "actionable": true,
+  "needs_more_info": false,
+  "severity": "low",
+  "component": "contrib.auth",
+  "summary": "Restore the maxlength HTML attribute on AuthenticationForm's username input.",
+  "suggested_labels": [
+   "Bug",
+   "contrib.auth"
+  ],
+  "confidence": 0.95,
+  "evidence": "The report describes a regression: AuthenticationForm's username field no longer renders the maxlength HTML attribute, introduced in #27515 / commit 5ceaf14686ce626404afb6a5fbd3d8286410bf13."
+ },
+ "reproduction": {
+  "status": "verified",
+  "command": "python /tmp/fixgate/repro.py",
+  "script": "from django.conf import settings\n\nif not settings.configured:\n    settings.configure(SECRET_KEY='test', INSTALLED_APPS=['django.contrib.auth', 'django.contrib.contenttypes'], DATABASES={'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': ':memory:'}}, USE_I18N=False)\nimport django\ndjango.setup()\nfrom django.contrib.auth.forms import AuthenticationForm\n\nform = AuthenticationForm()\nactual = form['username'].as_widget()\nexpected = 'maxlength=\"150\"'\nprint('actual:', actual)\nprint('expected attribute:', expected)\nassert expected in actual\n",
+  "exit_code": 1,
+  "output": "actual: <input type=\"text\" name=\"username\" autofocus autocapitalize=\"none\" autocomplete=\"username\" required id=\"id_username\">\nexpected attribute: maxlength=\"150\"\nTraceback (most recent call last):\n  File \"/tmp/fixgate/repro.py\", line 14, in <module>\n    assert expected in actual\nAssertionError\n",
+  "explanation": "AuthenticationForm username widget renders without maxlength despite field max_length being 150; expected maxlength=\"150\".",
+  "attempts": 1
+ },
+ "fix": {
+  "summary": "Set the AuthenticationForm username widget's maxlength attribute from the field's effective max_length.",
+  "root_cause": "AuthenticationForm assigned max_length to the CharField after widget construction. Unlike the model-generated form path, this did not populate widget.attrs['maxlength'], so rendering omitted the HTML attribute.",
+  "test_command": "./tests/runtests.py auth_tests.test_forms.AuthenticationFormTest --parallel 1",
+  "round": 1
+ },
+ "verification": {
+  "passed": true,
+  "repro_after": {
+   "exit_code": 0,
+   "output": "actual: <input type=\"text\" name=\"username\" autofocus autocapitalize=\"none\" autocomplete=\"username\" maxlength=\"150\" required id=\"id_username\">\nexpected attribute: maxlength=\"150\"\n"
+  },
+  "tests": {
+   "command": "./tests/runtests.py auth_tests.test_forms.AuthenticationFormTest --parallel 1",
+   "exit_code": 0,
+   "passed": true,
+   "failures": [],
+   "baseline_exit_code": null,
+   "baseline_failures": [],
+   "new_failures": [],
+   "verdict": "passed",
+   "output": "Creating test database for alias 'default'...\n..................\n----------------------------------------------------------------------\nRan 18 tests in 0.031s\n\nOK\nDestroying test database for alias 'default'...\nTesting against Django installed in '/testbed/django'\nSystem check identified no issues (0 silenced).\n"
+  },
+  "policy_violations": [],
+  "problems": [],
+  "warnings": []
+ },
+ "patch": "diff --git a/django/contrib/auth/forms.py b/django/contrib/auth/forms.py\nindex a0cfed0995..f6f73ba3e8 100644\n--- a/django/contrib/auth/forms.py\n+++ b/django/contrib/auth/forms.py\n@@ -192,6 +192,7 @@ class AuthenticationForm(forms.Form):\n         # Set the max length and label for the \"username\" field.\n         self.username_field = UserModel._meta.get_field(UserModel.USERNAME_FIELD)\n         self.fields['username'].max_length = self.username_field.max_length or 254\n+        self.fields['username'].widget.attrs['maxlength'] = self.fields['username'].max_length\n         if self.fields['username'].label is None:\n             self.fields['username'].label = capfirst(self.username_field.verbose_name)\n \n",
+ "gate_passed": true,
+ "usage": {
+  "llm_calls": 15,
+  "steps": 15,
+  "input_tokens": 74565,
+  "output_tokens": 867,
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 0,
+  "prompt_tokens": 74565,
+  "cost_usd": 0.00789,
+  "cost_cached_estimate_usd": 0.001859,
+  "cost_basis": "cached_estimate",
+  "usage_estimated_calls": 15,
+  "wall_s": 426.86,
+  "paused_s": 0.0
+ },
+ "stats": {
+  "tool:search_code": 1,
+  "tool:read_file": 1,
+  "tool:bash": 6,
+  "tool:write_file": 1,
+  "tool:report_reproduction": 1,
+  "tool:edit_file": 3,
+  "tool:submit_fix": 1,
+  "blocked_commands": 0,
+  "fix_rounds": 1
+ },
+ "model": "gpt-6-luna",
+ "provider": "openai",
+ "base_commit": "84a9058f3ff86c9e7b27cc134460437fc9a4aac1",
+ "trace_dir": "runs/mini50-gpt6-luna/traces/django__django-11790",
+ "approval_id": null,
+ "started_at": "2026-09-27T16:34:51+00:00",
+ "finished_at": "2026-09-27T16:40:24+00:00",
+ "patch_sha256": "4b276f8daf9a32bccd26e1ec2a6c046f6ea88ab38924551cf777ca305ebeb202"
+}

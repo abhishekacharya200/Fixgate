@@ -1,0 +1,109 @@
+{
+ "task_id": "django__django-12708",
+ "issue": {
+  "repo": "django/django",
+  "title": "Migration crashes deleting an index_together if there is a unique_together on the same fields",
+  "body": "Migration crashes deleting an index_together if there is a unique_together on the same fields\nDescription\n\t\nHappens with Django 1.11.10\nSteps to reproduce:\n1) Create models with 2 fields, add 2 same fields to unique_together and to index_together\n2) Delete index_together -> Fail\nIt will fail at django/db/backends/base/schema.py, line 378, in _delete_composed_index(), ValueError: Found wrong number (2) of constraints for as this one will find two constraints, the _uniq and the _idx one. No way to get out of this...\nThe worst in my case is that happened as I wanted to refactor my code to use the \"new\" (Dj 1.11) Options.indexes feature. I am actually not deleting the index, just the way it is declared in my code.\nI think there are 2 different points here:\n1) The deletion of index_together should be possible alone or made coherent (migrations side?) with unique_together\n2) Moving the declaration of an index should not result in an index re-creation",
+  "number": null,
+  "url": null,
+  "labels": [],
+  "comments": [],
+  "author": null,
+  "ref": "django__django-12708"
+ },
+ "outcome": {
+  "category": "patch_ready",
+  "subcategory": "reproduced",
+  "phase": "verify",
+  "message": "Restrict index_together deletion to non-unique indexes so an equivalent unique_together constraint remains untouched.",
+  "span_id": null,
+  "details": {
+   "warnings": []
+  },
+  "blame": "none"
+ },
+ "triage": {
+  "kind": "bug",
+  "actionable": true,
+  "needs_more_info": false,
+  "severity": "medium",
+  "component": "Migrations / database schema editor",
+  "summary": "Migration schema editing cannot unambiguously delete an index_together constraint when a unique_together constraint uses the same fields.",
+  "suggested_labels": [
+   "Database layer",
+   "Migrations"
+  ],
+  "confidence": 0.97,
+  "evidence": "Django 1.11.10 migration fails deleting index_together when the same fields are in unique_together; _delete_composed_index raises ValueError because it finds two constraints. Reporter also notes moving declaration to Options.indexes can recreate the index."
+ },
+ "reproduction": {
+  "status": "verified",
+  "command": "python /tmp/fixgate/repro.py",
+  "script": "from django.conf import settings\nsettings.configure(INSTALLED_APPS=[], DATABASES={\"default\": {\"ENGINE\": \"django.db.backends.sqlite3\", \"NAME\": \":memory:\"}})\nimport django\ndjango.setup()\nfrom django.db import connection, models\nfrom django.apps.registry import Apps\napps = Apps()\nclass M(models.Model):\n    a = models.IntegerField()\n    b = models.IntegerField()\n    class Meta:\n        apps = apps\n        app_label = 'repro'\n        unique_together = [('a', 'b')]\n        index_together = [('a', 'b')]\nwith connection.schema_editor() as e:\n    e.create_model(M)\ntry:\n    with connection.schema_editor() as e:\n        e.alter_index_together(M, [('a', 'b')], [])\nexcept Exception as exc:\n    actual = type(exc).__name__ + ': ' + str(exc)\nelse:\n    actual = 'success'\nfinally:\n    with connection.schema_editor() as e:\n        e.delete_model(M)\nexpected = 'success'\nprint('actual:', actual)\nprint('expected:', expected)\nassert actual == expected\n",
+  "exit_code": 1,
+  "output": "actual: ValueError: Found wrong number (2) of constraints for repro_m(a, b)\nexpected: success\nTraceback (most recent call last):\n  File \"/tmp/fixgate/repro.py\", line 31, in <module>\n    assert actual == expected\nAssertionError\n",
+  "explanation": "The standalone script creates unique_together and index_together over the same columns, then attempts to remove index_together. It fails with ValueError: Found wrong number (2) of constraints for repro_m(a, b), where success is expected.",
+  "attempts": 1
+ },
+ "fix": {
+  "summary": "Restrict index_together deletion to non-unique indexes so an equivalent unique_together constraint remains untouched.",
+  "root_cause": "The schema editor matched constraints by columns and index=True only, allowing both the regular index and unique constraint to match and making deletion ambiguous.",
+  "test_command": "./tests/runtests.py schema.tests.SchemaTests.test_index_together --parallel 1",
+  "round": 1
+ },
+ "verification": {
+  "passed": true,
+  "repro_after": {
+   "exit_code": 0,
+   "output": "actual: success\nexpected: success\n"
+  },
+  "tests": {
+   "command": "./tests/runtests.py schema.tests.SchemaTests.test_index_together --parallel 1",
+   "exit_code": 0,
+   "passed": true,
+   "failures": [],
+   "baseline_exit_code": null,
+   "baseline_failures": [],
+   "new_failures": [],
+   "verdict": "passed",
+   "output": "Creating test database for alias 'default'...\n.\n----------------------------------------------------------------------\nRan 1 test in 0.027s\n\nOK\nDestroying test database for alias 'default'...\nTesting against Django installed in '/testbed/django'\nSystem check identified no issues (0 silenced).\n"
+  },
+  "policy_violations": [],
+  "problems": [],
+  "warnings": []
+ },
+ "patch": "diff --git a/django/db/backends/base/schema.py b/django/db/backends/base/schema.py\nindex 61f88401ab..1f521cfc5c 100755\n--- a/django/db/backends/base/schema.py\n+++ b/django/db/backends/base/schema.py\n@@ -393,7 +393,7 @@ class BaseDatabaseSchemaEditor:\n         news = {tuple(fields) for fields in new_index_together}\n         # Deleted indexes\n         for fields in olds.difference(news):\n-            self._delete_composed_index(model, fields, {'index': True}, self.sql_delete_index)\n+            self._delete_composed_index(model, fields, {'index': True, 'unique': False}, self.sql_delete_index)\n         # Created indexes\n         for field_names in news.difference(olds):\n             fields = [model._meta.get_field(field) for field in field_names]\n",
+ "gate_passed": true,
+ "usage": {
+  "llm_calls": 12,
+  "steps": 12,
+  "input_tokens": 115132,
+  "output_tokens": 966,
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 0,
+  "prompt_tokens": 115132,
+  "cost_usd": 0.011996,
+  "cost_cached_estimate_usd": 0.002894,
+  "cost_basis": "cached_estimate",
+  "usage_estimated_calls": 12,
+  "wall_s": 256.05,
+  "paused_s": 0.0
+ },
+ "stats": {
+  "tool:read_file": 1,
+  "tool:bash": 7,
+  "tool:report_reproduction": 1,
+  "tool:edit_file": 1,
+  "tool:submit_fix": 1,
+  "blocked_commands": 0,
+  "fix_rounds": 1
+ },
+ "model": "gpt-6-luna",
+ "provider": "openai",
+ "base_commit": "d2c549d04abfe3fe928e1bf49f2d9b7c71515bfa",
+ "trace_dir": "runs/mini50-gpt6-luna/traces/django__django-12708",
+ "approval_id": null,
+ "started_at": "2026-09-27T17:49:38+00:00",
+ "finished_at": "2026-09-27T17:53:53+00:00",
+ "patch_sha256": "e802e84920f827958bc0999cd9227431e543231212fcd1df80760fa6f3d64d43"
+}

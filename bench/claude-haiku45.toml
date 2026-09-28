@@ -1,0 +1,7 @@
+# Configuration of the full 50-issue SWE-bench Verified mini run published in docs/results.
+# Everything not listed here is fixgate's default (see fixgate.example.toml).
+
+[llm]
+provider = "anthropic"                  # Anthropic Messages format
+model = "claude-haiku-4-5-20251001"
+base_url = "http://127.0.0.1:8787"      # the local RAG gateway (Claude Code on a Claude Pro login)

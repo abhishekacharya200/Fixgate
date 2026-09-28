@@ -1,0 +1,112 @@
+{
+ "task_id": "django__django-12193",
+ "issue": {
+  "repo": "django/django",
+  "title": "SplitArrayField with BooleanField always has widgets checked after the first True value.",
+  "body": "SplitArrayField with BooleanField always has widgets checked after the first True value.\nDescription\n\t \n\t\t(last modified by Peter Andersen)\n\t \nWhen providing a SplitArrayField BooleanField with preexisting data, the final_attrs dict is updated to include 'checked': True after the for loop has reached the first True value in the initial data array. Once this occurs every widget initialized after that defaults to checked even though the backing data may be False. This is caused by the CheckboxInput widget's get_context() modifying the attrs dict passed into it. This is the only widget that modifies the attrs dict passed into its get_context().\nCheckboxInput setting attrs['checked'] to True: \u200bhttps://github.com/django/django/blob/master/django/forms/widgets.py#L527",
+  "number": null,
+  "url": null,
+  "labels": [],
+  "comments": [],
+  "author": null,
+  "ref": "django__django-12193"
+ },
+ "outcome": {
+  "category": "patch_ready",
+  "subcategory": "reproduced",
+  "phase": "verify",
+  "message": "Copy the base widget attrs for each SplitArrayWidget subwidget before rendering it.",
+  "span_id": null,
+  "details": {
+   "warnings": []
+  },
+  "blame": "none"
+ },
+ "triage": {
+  "kind": "bug",
+  "actionable": true,
+  "needs_more_info": false,
+  "severity": "medium",
+  "component": "Forms (SplitArrayField and CheckboxInput widgets)",
+  "summary": "SplitArrayField reuses mutable widget attrs, so BooleanField checkboxes after the first True value are incorrectly rendered as checked.",
+  "suggested_labels": [
+   "type: bug",
+   " component: Forms"
+  ],
+  "confidence": 0.97,
+  "evidence": "The report gives a reproducible cause: CheckboxInput.get_context() mutates the shared attrs dict, leaving checked=True for subsequent widgets in SplitArrayField."
+ },
+ "reproduction": {
+  "status": "verified",
+  "command": "python /tmp/fixgate/repro.py",
+  "script": "import sys, types\npsycopg2 = types.ModuleType('psycopg2')\nextras = types.ModuleType('psycopg2.extras')\nfor name in ('DateRange', 'DateTimeTZRange', 'NumericRange'):\n    setattr(extras, name, type(name, (), {}))\npsycopg2.extras = extras\nsys.modules['psycopg2'] = psycopg2\nsys.modules['psycopg2.extras'] = extras\nfrom django import forms\nfrom django.contrib.postgres.forms import SplitArrayField\nfield = SplitArrayField(forms.BooleanField(), size=3, required=False)\nwidgets = field.widget.get_context('flag', [True, False, False])['widget']['subwidgets']\nactual = [widget['attrs'].get('checked', False) for widget in widgets]\nexpected = [True, False, False]\nprint('actual:', actual)\nprint('expected:', expected)\nassert actual == expected\n",
+  "exit_code": 1,
+  "output": "actual: [True, True, True]\nexpected: [True, False, False]\nTraceback (most recent call last):\n  File \"/tmp/fixgate/repro.py\", line 17, in <module>\n    assert actual == expected\nAssertionError\n",
+  "explanation": "Reproduced: SplitArrayWidget's shared final_attrs gets mutated by CheckboxInput; [True, False, False] yields checked attrs [True, True, True].",
+  "attempts": 1
+ },
+ "fix": {
+  "summary": "Copy the base widget attrs for each SplitArrayWidget subwidget before rendering it.",
+  "root_cause": "CheckboxInput mutates its attrs dict to set checked=True; SplitArrayWidget reused the same final_attrs dict across iterations, causing later checkboxes to remain checked.",
+  "test_command": "./tests/runtests.py postgres_tests.test_array --parallel 1",
+  "round": 1
+ },
+ "verification": {
+  "passed": true,
+  "repro_after": {
+   "exit_code": 0,
+   "output": "actual: [True, False, False]\nexpected: [True, False, False]\n"
+  },
+  "tests": {
+   "command": "./tests/runtests.py postgres_tests.test_array --parallel 1",
+   "exit_code": 0,
+   "passed": true,
+   "failures": [],
+   "baseline_exit_code": null,
+   "baseline_failures": [],
+   "new_failures": [],
+   "verdict": "passed",
+   "output": "Creating test database for alias 'default'...\nsssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss\n----------------------------------------------------------------------\nRan 109 tests in 0.002s\n\nOK (skipped=109)\nDestroying test database for alias 'default'...\nTesting against Django installed in '/testbed/django'\nSystem check identified no issues (0 silenced).\n"
+  },
+  "policy_violations": [],
+  "problems": [],
+  "warnings": []
+ },
+ "patch": "diff --git a/django/contrib/postgres/forms/array.py b/django/contrib/postgres/forms/array.py\nindex 2e19cd574a..fb1a836896 100644\n--- a/django/contrib/postgres/forms/array.py\n+++ b/django/contrib/postgres/forms/array.py\n@@ -144,10 +144,11 @@ class SplitArrayWidget(forms.Widget):\n                 widget_value = value[i]\n             except IndexError:\n                 widget_value = None\n+            widget_attrs = final_attrs.copy()\n             if id_:\n-                final_attrs = {**final_attrs, 'id': '%s_%s' % (id_, i)}\n+                widget_attrs['id'] = '%s_%s' % (id_, i)\n             context['widget']['subwidgets'].append(\n-                self.widget.get_context(name + '_%s' % i, widget_value, final_attrs)['widget']\n+                self.widget.get_context(name + '_%s' % i, widget_value, widget_attrs)['widget']\n             )\n         return context\n \n",
+ "gate_passed": true,
+ "usage": {
+  "llm_calls": 15,
+  "steps": 15,
+  "input_tokens": 93267,
+  "output_tokens": 947,
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 0,
+  "prompt_tokens": 93267,
+  "cost_usd": 0.0098,
+  "cost_cached_estimate_usd": 0.002289,
+  "cost_basis": "cached_estimate",
+  "usage_estimated_calls": 15,
+  "wall_s": 333.57,
+  "paused_s": 0.0
+ },
+ "stats": {
+  "tool:search_code": 2,
+  "tool:read_file": 2,
+  "invalid_calls": 1,
+  "tool:bash": 5,
+  "tool:write_file": 1,
+  "tool:report_reproduction": 1,
+  "tool:edit_file": 1,
+  "tool:submit_fix": 1,
+  "blocked_commands": 0,
+  "fix_rounds": 1
+ },
+ "model": "gpt-6-luna",
+ "provider": "openai",
+ "base_commit": "5c2b5096910046b971df67c59904741b4acf8dae",
+ "trace_dir": "runs/mini50-gpt6-luna/traces/django__django-12193",
+ "approval_id": null,
+ "started_at": "2026-09-27T17:16:06+00:00",
+ "finished_at": "2026-09-27T17:21:39+00:00",
+ "patch_sha256": "f6492118d678cd07f994e6e8dd6ff079cf974371c2dcd475e9e321450490040e"
+}

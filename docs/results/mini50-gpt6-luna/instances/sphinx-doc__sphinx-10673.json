@@ -1,0 +1,112 @@
+{
+ "task_id": "sphinx-doc__sphinx-10673",
+ "issue": {
+  "repo": "sphinx-doc/sphinx",
+  "title": "toctree contains reference to nonexisting document 'genindex', 'modindex', 'search'",
+  "body": "toctree contains reference to nonexisting document 'genindex', 'modindex', 'search'\n**Is your feature request related to a problem? Please describe.**\r\nA lot of users try to add the following links to the toctree:\r\n```\r\n* :ref:`genindex`\r\n* :ref:`modindex`\r\n* :ref:`search`\r\n```\r\nlike this:\r\n```\r\n.. toctree::\r\n   :maxdepth: 1\r\n   :caption: Indices and tables\r\n\r\n   genindex \r\n   modindex\r\n   search\r\n```\r\n\r\nSee:\r\n* https://stackoverflow.com/questions/36235578/how-can-i-include-the-genindex-in-a-sphinx-toc\r\n* https://stackoverflow.com/questions/25243482/how-to-add-sphinx-generated-index-to-the-sidebar-when-using-read-the-docs-theme\r\n* https://stackoverflow.com/questions/40556423/how-can-i-link-the-generated-index-page-in-readthedocs-navigation-bar\r\n\r\nAnd probably more.\r\n\r\nHowever when doing this we get:\r\n```\r\n$ make html\r\n...\r\n.../index.rst:30: WARNING: toctree contains reference to nonexisting document 'genindex'\r\n.../index.rst:30: WARNING: toctree contains reference to nonexisting document 'modindex'\r\n.../index.rst:30: WARNING: toctree contains reference to nonexisting document 'search'\r\n...\r\n```\r\n\r\n**Describe the solution you'd like**\r\nThe following directive should be possible and do not rise errors:\r\n```\r\n.. toctree::\r\n   :maxdepth: 1\r\n   :caption: Indices and tables\r\n\r\n   genindex \r\n   modindex\r\n   search\r\n``",
+  "number": null,
+  "url": null,
+  "labels": [],
+  "comments": [],
+  "author": null,
+  "ref": "sphinx-doc__sphinx-10673"
+ },
+ "outcome": {
+  "category": "patch_ready",
+  "subcategory": "reproduced",
+  "phase": "verify",
+  "message": "Allow genindex, modindex, and search toctree entries without treating them as source documents, and render them as direct generated-page links during TOC resolution.",
+  "span_id": null,
+  "details": {
+   "warnings": []
+  },
+  "blame": "none"
+ },
+ "triage": {
+  "kind": "feature",
+  "actionable": true,
+  "needs_more_info": false,
+  "severity": "low",
+  "component": "toctree/document reference resolution",
+  "summary": "Allow generated index and search pages (genindex, modindex, search) to be referenced as toctree entries without nonexisting-document warnings.",
+  "suggested_labels": [
+   "feature",
+   "toctree"
+  ],
+  "confidence": 0.93,
+  "evidence": "Reporter describes users adding genindex, modindex, and search in a toctree and requests that these generated pages be accepted without warnings."
+ },
+ "reproduction": {
+  "status": "verified",
+  "command": "python /tmp/fixgate/repro.py",
+  "script": "import subprocess, tempfile\nfrom pathlib import Path\n\nwith tempfile.TemporaryDirectory() as d:\n    root = Path(d)\n    (root / \"conf.py\").write_text(\"extensions = []\\nmaster_doc = 'index'\\n\")\n    (root / \"index.rst\").write_text(\"\"\"Indices\\n=======\\n\\n.. toctree::\\n   :maxdepth: 1\\n\\n   genindex\\n   modindex\\n   search\\n\"\"\")\n    result = subprocess.run([\"sphinx-build\", \"-b\", \"html\", \"-q\", str(root), str(root / \"_build\")], text=True, capture_output=True)\n    actual = result.stderr + result.stdout\n    expected = \"no warnings about generated pages\"\n    print(\"actual:\", actual.strip())\n    print(\"expected:\", expected)\n    assert \"toctree contains reference to nonexisting document 'genindex'\" not in actual\n",
+  "exit_code": 1,
+  "output": "actual: /tmp/tmpdacujs58/index.rst:4: WARNING: toctree contains reference to nonexisting document 'genindex'\n/tmp/tmpdacujs58/index.rst:4: WARNING: toctree contains reference to nonexisting document 'modindex'\n/tmp/tmpdacujs58/index.rst:4: WARNING: toctree contains reference to nonexisting document 'search'\nexpected: no warnings about generated pages\nTraceback (most recent call last):\n  File \"/tmp/fixgate/repro.py\", line 13, in <module>\n    assert \"toctree contains reference to nonexisting document 'genindex'\" not in actual\nAssertionError\n",
+  "explanation": "A minimal Sphinx HTML build with genindex, modindex, and search in its toctree emits nonexisting-document warnings for all three generated pages.",
+  "attempts": 1
+ },
+ "fix": {
+  "summary": "Allow genindex, modindex, and search toctree entries without treating them as source documents, and render them as direct generated-page links during TOC resolution.",
+  "root_cause": "The toctree directive accepts only found source documents, while generated HTML index/search pages are not represented by environment TOCs; merely bypassing validation still led to KeyError when resolving entries.",
+  "test_command": "pytest tests/test_toctree.py tests/test_environment_toctree.py -q",
+  "round": 1
+ },
+ "verification": {
+  "passed": true,
+  "repro_after": {
+   "exit_code": 0,
+   "output": "actual: \nexpected: no warnings about generated pages\n"
+  },
+  "tests": {
+   "command": "pytest tests/test_toctree.py tests/test_environment_toctree.py -q",
+   "exit_code": 0,
+   "passed": true,
+   "failures": [],
+   "baseline_exit_code": null,
+   "baseline_failures": [],
+   "new_failures": [],
+   "verdict": "passed",
+   "output": "............                                                             [100%]\n12 passed in 1.24s\n"
+  },
+  "policy_violations": [],
+  "problems": [],
+  "warnings": []
+ },
+ "patch": "diff --git a/sphinx/directives/other.py b/sphinx/directives/other.py\nindex 35e16e623..aba028de1 100644\n--- a/sphinx/directives/other.py\n+++ b/sphinx/directives/other.py\n@@ -118,6 +118,8 @@ class TocTree(SphinxDirective):\n                 docname = docname_join(self.env.docname, docname)\n                 if url_re.match(ref) or ref == 'self':\n                     toctree['entries'].append((title, ref))\n+                elif docname in {'genindex', 'modindex', 'search'}:\n+                    toctree['entries'].append((title, docname))\n                 elif docname not in self.env.found_docs:\n                     if excluded(self.env.doc2path(docname, False)):\n                         message = __('toctree contains reference to excluded document %r')\ndiff --git a/sphinx/environment/adapters/toctree.py b/sphinx/environment/adapters/toctree.py\nindex 9678e3c7c..814f8718e 100644\n--- a/sphinx/environment/adapters/toctree.py\n+++ b/sphinx/environment/adapters/toctree.py\n@@ -147,11 +147,23 @@ class TocTree:\n                                            location=ref, type='toc', subtype='circular')\n                             continue\n                         refdoc = ref\n-                        toc = self.env.tocs[ref].deepcopy()\n-                        maxdepth = self.env.metadata[ref].get('tocdepth', 0)\n-                        if ref not in toctree_ancestors or (prune and maxdepth > 0):\n-                            self._toctree_prune(toc, 2, maxdepth, collapse)\n-                        process_only_nodes(toc, builder.tags)\n+                        if ref in {'genindex', 'modindex', 'search'}:\n+                            # Generated HTML pages do not have environment TOCs.\n+                            if ref == 'modindex':\n+                                ref = 'py-modindex'\n+                            title = title or ref\n+                            reference = nodes.reference('', '', internal=True,\n+                                                        refuri=ref, anchorname='',\n+                                                        *[nodes.Text(title)])\n+                            para = addnodes.compact_paragraph('', '', reference)\n+                            item = nodes.list_item('', para)\n+                            toc = nodes.bullet_list('', item)\n+                        else:\n+                            toc = self.env.tocs[ref].deepcopy()\n+                            maxdepth = self.env.metadata[ref].get('tocdepth', 0)\n+                            if ref not in toctree_ancestors or (prune and maxdepth > 0):\n+                                self._toctree_prune(toc, 2, maxdepth, collapse)\n+                            process_only_nodes(toc, builder.tags)\n                         if title and toc.children and len(toc.children) == 1:\n                             child = toc.children[0]\n                             for refnode in child.findall(nodes.reference):\n",
+ "gate_passed": true,
+ "usage": {
+  "llm_calls": 28,
+  "steps": 28,
+  "input_tokens": 430417,
+  "output_tokens": 1775,
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 0,
+  "prompt_tokens": 430417,
+  "cost_usd": 0.043929,
+  "cost_cached_estimate_usd": 0.007587,
+  "cost_basis": "cached_estimate",
+  "usage_estimated_calls": 28,
+  "wall_s": 769.75,
+  "paused_s": 0.0
+ },
+ "stats": {
+  "tool:search_code": 2,
+  "tool:read_file": 1,
+  "tool:bash": 16,
+  "invalid_calls": 3,
+  "tool:write_file": 1,
+  "tool:report_reproduction": 1,
+  "tool:edit_file": 2,
+  "tool:submit_fix": 1,
+  "blocked_commands": 0,
+  "fix_rounds": 1
+ },
+ "model": "gpt-6-luna",
+ "provider": "openai",
+ "base_commit": "1ce24b9ff92e07a163731bfbf879b95dbd0aecad",
+ "trace_dir": "runs/mini50-gpt6-luna/traces/sphinx-doc__sphinx-10673",
+ "approval_id": null,
+ "started_at": "2026-09-27T18:17:43+00:00",
+ "finished_at": "2026-09-27T18:30:32+00:00",
+ "patch_sha256": "dc17475de885669c2aefece4eb4d1849bdda3a490c2becc1738446ad6525c9e7"
+}

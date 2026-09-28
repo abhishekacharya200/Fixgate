@@ -1,0 +1,12 @@
+# Configuration of the SWE-bench Verified mini benchmark run published in docs/results.
+# Everything not listed here is fixgate's default (see fixgate.example.toml).
+
+[llm]
+provider = "openai"          # OpenAI Chat Completions format
+model = "gpt-6-luna"
+base_url = "http://127.0.0.1:8787"   # the local RAG gateway (Codex CLI on a ChatGPT plan)
+
+[budget]
+# Codex through the gateway takes about 20 s per model call (the real API is far faster), so the
+# wall-clock limit is raised from the default 45 minutes. The step, token and cost limits are the defaults.
+max_wall_s = 5400

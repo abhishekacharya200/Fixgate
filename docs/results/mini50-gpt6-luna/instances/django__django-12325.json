@@ -1,0 +1,112 @@
+{
+ "task_id": "django__django-12325",
+ "issue": {
+  "repo": "django/django",
+  "title": "pk setup for MTI to parent get confused by multiple OneToOne references.",
+  "body": "pk setup for MTI to parent get confused by multiple OneToOne references.\nDescription\n\t\nclass Document(models.Model):\n\tpass\nclass Picking(Document):\n\tdocument_ptr = models.OneToOneField(Document, on_delete=models.CASCADE, parent_link=True, related_name='+')\n\torigin = models.OneToOneField(Document, related_name='picking', on_delete=models.PROTECT)\nproduces django.core.exceptions.ImproperlyConfigured: Add parent_link=True to appname.Picking.origin.\nclass Picking(Document):\n\torigin = models.OneToOneField(Document, related_name='picking', on_delete=models.PROTECT)\n\tdocument_ptr = models.OneToOneField(Document, on_delete=models.CASCADE, parent_link=True, related_name='+')\nWorks\nFirst issue is that order seems to matter?\nEven if ordering is required \"by design\"(It shouldn't be we have explicit parent_link marker) shouldn't it look from top to bottom like it does with managers and other things?",
+  "number": null,
+  "url": null,
+  "labels": [],
+  "comments": [],
+  "author": null,
+  "ref": "django__django-12325"
+ },
+ "outcome": {
+  "category": "patch_ready",
+  "subcategory": "reproduced",
+  "phase": "verify",
+  "message": "Only consider explicitly marked parent links when setting up multi-table inheritance links, so unrelated OneToOneFields cannot replace the actual parent link based on declaration order.",
+  "span_id": null,
+  "details": {
+   "warnings": []
+  },
+  "blame": "none"
+ },
+ "triage": {
+  "kind": "bug",
+  "actionable": true,
+  "needs_more_info": false,
+  "severity": "medium",
+  "component": "django.db.models (model inheritance / fields)",
+  "summary": "Multi-table inheritance parent-link detection depends on the declaration order of multiple OneToOneFields.",
+  "suggested_labels": [
+   "Models",
+   "Multi-table inheritance"
+  ],
+  "confidence": 0.92,
+  "evidence": "The provided model raises ImproperlyConfigured asking to add parent_link=True to the unrelated `origin` field when the explicit `document_ptr` parent link is declared first; reversing field order works."
+ },
+ "reproduction": {
+  "status": "verified",
+  "command": "python /tmp/fixgate/repro.py",
+  "script": "from django.conf import settings\nsettings.configure(INSTALLED_APPS=[], SECRET_KEY=\"x\")\nimport django\ndjango.setup()\nfrom django.db import models\n\nclass Document(models.Model):\n    class Meta:\n        app_label = \"repro\"\n\ntry:\n    class Picking(Document):\n        document_ptr = models.OneToOneField(Document, on_delete=models.CASCADE, parent_link=True, related_name=\"+\")\n        origin = models.OneToOneField(Document, related_name=\"picking\", on_delete=models.PROTECT)\n        class Meta:\n            app_label = \"repro\"\nexcept Exception as exc:\n    actual = f\"{type(exc).__name__}: {exc}\"\nelse:\n    actual = \"class creation succeeded\"\nexpected = \"class creation succeeded\"\nprint(\"actual:\", actual)\nprint(\"expected:\", expected)\nassert actual == expected\n",
+  "exit_code": 1,
+  "output": "actual: ImproperlyConfigured: Add parent_link=True to repro.Picking.origin.\nexpected: class creation succeeded\nTraceback (most recent call last):\n  File \"/tmp/fixgate/repro.py\", line 24, in <module>\n    assert actual == expected\nAssertionError\n",
+  "explanation": "The class definition fails with ImproperlyConfigured for origin despite explicit document_ptr parent_link=True; reversing field order avoids it.",
+  "attempts": 1
+ },
+ "fix": {
+  "summary": "Only consider explicitly marked parent links when setting up multi-table inheritance links, so unrelated OneToOneFields cannot replace the actual parent link based on declaration order.",
+  "root_cause": "ModelBase collected every OneToOneField pointing at a parent into parent_links, allowing a later non-parent relationship to overwrite the explicitly marked parent link. Options._prepare then promoted that unrelated field and raised ImproperlyConfigured.",
+  "test_command": "./tests/runtests.py model_inheritance --parallel 1",
+  "round": 1
+ },
+ "verification": {
+  "passed": true,
+  "repro_after": {
+   "exit_code": 0,
+   "output": "actual: class creation succeeded\nexpected: class creation succeeded\n"
+  },
+  "tests": {
+   "command": "./tests/runtests.py model_inheritance --parallel 1",
+   "exit_code": 0,
+   "passed": true,
+   "failures": [],
+   "baseline_exit_code": null,
+   "baseline_failures": [],
+   "new_failures": [],
+   "verdict": "passed",
+   "output": "Creating test database for alias 'default'...\n..............................................\n----------------------------------------------------------------------\nRan 46 tests in 0.113s\n\nOK\nDestroying test database for alias 'default'...\nTesting against Django installed in '/testbed/django'\nSystem check identified no issues (0 silenced).\n"
+  },
+  "policy_violations": [],
+  "problems": [],
+  "warnings": []
+ },
+ "patch": "diff --git a/django/db/models/base.py b/django/db/models/base.py\nindex 8ea6c05ef9..24453e218a 100644\n--- a/django/db/models/base.py\n+++ b/django/db/models/base.py\n@@ -202,7 +202,7 @@ class ModelBase(type):\n                 continue\n             # Locate OneToOneField instances.\n             for field in base._meta.local_fields:\n-                if isinstance(field, OneToOneField):\n+                if isinstance(field, OneToOneField) and field.remote_field.parent_link:\n                     related = resolve_relation(new_class, field.remote_field.model)\n                     parent_links[make_model_tuple(related)] = field\n \n",
+ "gate_passed": true,
+ "usage": {
+  "llm_calls": 13,
+  "steps": 13,
+  "input_tokens": 63447,
+  "output_tokens": 830,
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 0,
+  "prompt_tokens": 63447,
+  "cost_usd": 0.00676,
+  "cost_cached_estimate_usd": 0.001715,
+  "cost_basis": "cached_estimate",
+  "usage_estimated_calls": 13,
+  "wall_s": 290.22,
+  "paused_s": 0.0
+ },
+ "stats": {
+  "tool:search_code": 1,
+  "tool:read_file": 3,
+  "tool:write_file": 1,
+  "tool:bash": 3,
+  "invalid_calls": 1,
+  "tool:report_reproduction": 1,
+  "tool:edit_file": 1,
+  "tool:submit_fix": 1,
+  "blocked_commands": 0,
+  "fix_rounds": 1
+ },
+ "model": "gpt-6-luna",
+ "provider": "openai",
+ "base_commit": "a4207d7dd3e204621b099c424bc18f5979fa330e",
+ "trace_dir": "runs/mini50-gpt6-luna/traces/django__django-12325",
+ "approval_id": null,
+ "started_at": "2026-09-27T17:44:48+00:00",
+ "finished_at": "2026-09-27T17:49:37+00:00",
+ "patch_sha256": "fc6bdabc1e5f4e67987c63f20973b8fdb42ae641fcf7f67b4d1b9de4ac7f5479"
+}

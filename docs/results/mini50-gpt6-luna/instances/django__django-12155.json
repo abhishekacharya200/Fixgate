@@ -1,0 +1,110 @@
+{
+ "task_id": "django__django-12155",
+ "issue": {
+  "repo": "django/django",
+  "title": "docutils reports an error rendering view docstring when the first line is not empty",
+  "body": "docutils reports an error rendering view docstring when the first line is not empty\nDescription\n\t\nCurrently admindoc works correctly only with docstrings where the first line is empty, and all Django docstrings are formatted in this way.\nHowever usually the docstring text starts at the first line, e.g.:\ndef test():\n\t\"\"\"test tests something.\n\t\"\"\"\nand this cause an error:\nError in \"default-role\" directive:\nno content permitted.\n.. default-role:: cmsreference\nThe culprit is this code in trim_docstring:\nindent = min(len(line) - len(line.lstrip()) for line in lines if line.lstrip())\nThe problem is that the indentation of the first line is 0.\nThe solution is to skip the first line:\nindent = min(len(line) - len(line.lstrip()) for line in lines[1:] if line.lstrip())\nThanks.",
+  "number": null,
+  "url": null,
+  "labels": [],
+  "comments": [],
+  "author": null,
+  "ref": "django__django-12155"
+ },
+ "outcome": {
+  "category": "patch_ready",
+  "subcategory": "reproduced",
+  "phase": "verify",
+  "message": "Updated trim_docstring() to compute indentation from lines after the first, preserving the first line's special handling while trimming continuation lines correctly.",
+  "span_id": null,
+  "details": {
+   "warnings": []
+  },
+  "blame": "none"
+ },
+ "triage": {
+  "kind": "bug",
+  "actionable": true,
+  "needs_more_info": false,
+  "severity": "low",
+  "component": "admindocs",
+  "summary": "admindoc docstring trimming incorrectly calculates indentation when the first docstring line is non-empty, causing docutils rendering to fail.",
+  "suggested_labels": [
+   "bug",
+   "admindocs"
+  ],
+  "confidence": 0.96,
+  "evidence": "The issue describes an error rendering view docstrings when the first line contains text, and identifies trim_docstring()'s indentation calculation as including the unindented first line."
+ },
+ "reproduction": {
+  "status": "verified",
+  "command": "python /tmp/fixgate/repro.py",
+  "script": "from django.contrib.admindocs.utils import trim_docstring\n\ndocstring = 'test tests something.\\n    continuation'\nactual = trim_docstring(docstring)\nexpected = 'test tests something.\\ncontinuation'\nprint('actual:', repr(actual))\nprint('expected:', repr(expected))\nassert actual == expected\n",
+  "exit_code": 1,
+  "output": "actual: 'test tests something.\\n    continuation'\nexpected: 'test tests something.\\ncontinuation'\nTraceback (most recent call last):\n  File \"/tmp/fixgate/repro.py\", line 8, in <module>\n    assert actual == expected\nAssertionError\n",
+  "explanation": "trim_docstring leaves indentation on continuation line when first line is non-empty; expected normalized continuation indentation.",
+  "attempts": 1
+ },
+ "fix": {
+  "summary": "Updated trim_docstring() to compute indentation from lines after the first, preserving the first line's special handling while trimming continuation lines correctly.",
+  "root_cause": "The indentation minimum included a non-empty first line at column zero, forcing the minimum indent to zero and leaving continuation indentation untouched.",
+  "test_command": "./tests/runtests.py admin_docs.test_utils --parallel 1",
+  "round": 1
+ },
+ "verification": {
+  "passed": true,
+  "repro_after": {
+   "exit_code": 0,
+   "output": "actual: 'test tests something.\\ncontinuation'\nexpected: 'test tests something.\\ncontinuation'\n"
+  },
+  "tests": {
+   "command": "./tests/runtests.py admin_docs.test_utils --parallel 1",
+   "exit_code": 0,
+   "passed": true,
+   "failures": [],
+   "baseline_exit_code": null,
+   "baseline_failures": [],
+   "new_failures": [],
+   "verdict": "passed",
+   "output": ".......\n----------------------------------------------------------------------\nRan 7 tests in 0.091s\n\nOK\nTesting against Django installed in '/testbed/django'\nSystem check identified no issues (0 silenced).\n"
+  },
+  "policy_violations": [],
+  "problems": [],
+  "warnings": []
+ },
+ "patch": "diff --git a/django/contrib/admindocs/utils.py b/django/contrib/admindocs/utils.py\nindex 4c0e7e2a56..aeec9fae5c 100644\n--- a/django/contrib/admindocs/utils.py\n+++ b/django/contrib/admindocs/utils.py\n@@ -34,7 +34,7 @@ def trim_docstring(docstring):\n         return ''\n     # Convert tabs to spaces and split into lines\n     lines = docstring.expandtabs().splitlines()\n-    indent = min(len(line) - len(line.lstrip()) for line in lines if line.lstrip())\n+    indent = min(len(line) - len(line.lstrip()) for line in lines[1:] if line.lstrip())\n     trimmed = [lines[0].lstrip()] + [line[indent:].rstrip() for line in lines[1:]]\n     return \"\\n\".join(trimmed).strip()\n \n",
+ "gate_passed": true,
+ "usage": {
+  "llm_calls": 12,
+  "steps": 12,
+  "input_tokens": 65387,
+  "output_tokens": 671,
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 0,
+  "prompt_tokens": 65387,
+  "cost_usd": 0.006874,
+  "cost_cached_estimate_usd": 0.001708,
+  "cost_basis": "cached_estimate",
+  "usage_estimated_calls": 12,
+  "wall_s": 438.85,
+  "paused_s": 0.0
+ },
+ "stats": {
+  "tool:search_code": 1,
+  "tool:read_file": 1,
+  "tool:bash": 6,
+  "tool:report_reproduction": 1,
+  "tool:edit_file": 1,
+  "tool:submit_fix": 1,
+  "blocked_commands": 0,
+  "fix_rounds": 1
+ },
+ "model": "gpt-6-luna",
+ "provider": "openai",
+ "base_commit": "153bc9db1b2231896f3d69e3adfad2041a03dec9",
+ "trace_dir": "runs/mini50-gpt6-luna/traces/django__django-12155",
+ "approval_id": null,
+ "started_at": "2026-09-27T17:12:53+00:00",
+ "finished_at": "2026-09-27T17:20:11+00:00",
+ "patch_sha256": "60aae0df47d237f826a31a6da2a7cb7db8dc4a93e1148d7f471cd2a0a87440e4"
+}

@@ -1,0 +1,275 @@
+{
+ "main": {
+  "django__django-11951": {
+   "resolved": true,
+   "applied": true,
+   "infra_failure": false,
+   "fail_to_pass_failed": 0,
+   "fail_to_pass_total": 1,
+   "pass_to_pass_failed": 0,
+   "pass_to_pass_total": 21
+  },
+  "django__django-11848": {
+   "resolved": true,
+   "applied": true,
+   "infra_failure": false,
+   "fail_to_pass_failed": 0,
+   "fail_to_pass_total": 2,
+   "pass_to_pass_failed": 0,
+   "pass_to_pass_total": 43
+  },
+  "django__django-12325": {
+   "resolved": true,
+   "applied": true,
+   "infra_failure": false,
+   "fail_to_pass_failed": 0,
+   "fail_to_pass_total": 2,
+   "pass_to_pass_failed": 0,
+   "pass_to_pass_total": 201
+  },
+  "django__django-11964": {
+   "resolved": true,
+   "applied": true,
+   "infra_failure": false,
+   "fail_to_pass_failed": 0,
+   "fail_to_pass_total": 2,
+   "pass_to_pass_failed": 0,
+   "pass_to_pass_total": 15
+  },
+  "django__django-12262": {
+   "resolved": true,
+   "applied": true,
+   "infra_failure": false,
+   "fail_to_pass_failed": 0,
+   "fail_to_pass_total": 4,
+   "pass_to_pass_failed": 0,
+   "pass_to_pass_total": 18
+  },
+  "django__django-12774": {
+   "resolved": true,
+   "applied": true,
+   "infra_failure": false,
+   "fail_to_pass_failed": 0,
+   "fail_to_pass_total": 1,
+   "pass_to_pass_failed": 0,
+   "pass_to_pass_total": 41
+  },
+  "django__django-12209": {
+   "resolved": true,
+   "applied": true,
+   "infra_failure": false,
+   "fail_to_pass_failed": 0,
+   "fail_to_pass_total": 1,
+   "pass_to_pass_failed": 0,
+   "pass_to_pass_total": 0
+  },
+  "sphinx-doc__sphinx-10673": {
+   "resolved": true,
+   "applied": true,
+   "infra_failure": false,
+   "fail_to_pass_failed": 0,
+   "fail_to_pass_total": 1,
+   "pass_to_pass_failed": 0,
+   "pass_to_pass_total": 9
+  },
+  "django__django-12304": {
+   "resolved": true,
+   "applied": true,
+   "infra_failure": false,
+   "fail_to_pass_failed": 0,
+   "fail_to_pass_total": 1,
+   "pass_to_pass_failed": 0,
+   "pass_to_pass_total": 17
+  },
+  "django__django-11880": {
+   "resolved": true,
+   "applied": true,
+   "infra_failure": false,
+   "fail_to_pass_failed": 0,
+   "fail_to_pass_total": 1,
+   "pass_to_pass_failed": 0,
+   "pass_to_pass_total": 114
+  },
+  "django__django-12039": {
+   "resolved": false,
+   "applied": true,
+   "infra_failure": false,
+   "fail_to_pass_failed": 1,
+   "fail_to_pass_total": 1,
+   "pass_to_pass_failed": 0,
+   "pass_to_pass_total": 11
+  },
+  "sphinx-doc__sphinx-10323": {
+   "resolved": true,
+   "applied": true,
+   "infra_failure": false,
+   "fail_to_pass_failed": 0,
+   "fail_to_pass_total": 1,
+   "pass_to_pass_failed": 0,
+   "pass_to_pass_total": 40
+  },
+  "django__django-12193": {
+   "resolved": false,
+   "applied": true,
+   "infra_failure": false,
+   "fail_to_pass_failed": 1,
+   "fail_to_pass_total": 1,
+   "pass_to_pass_failed": 0,
+   "pass_to_pass_total": 11
+  },
+  "django__django-11999": {
+   "resolved": true,
+   "applied": true,
+   "infra_failure": false,
+   "fail_to_pass_failed": 0,
+   "fail_to_pass_total": 1,
+   "pass_to_pass_failed": 0,
+   "pass_to_pass_total": 30
+  },
+  "django__django-11815": {
+   "resolved": false,
+   "applied": true,
+   "infra_failure": false,
+   "fail_to_pass_failed": 1,
+   "fail_to_pass_total": 2,
+   "pass_to_pass_failed": 0,
+   "pass_to_pass_total": 44
+  },
+  "django__django-11885": {
+   "resolved": true,
+   "applied": true,
+   "infra_failure": false,
+   "fail_to_pass_failed": 0,
+   "fail_to_pass_total": 1,
+   "pass_to_pass_failed": 0,
+   "pass_to_pass_total": 43
+  },
+  "django__django-12406": {
+   "resolved": false,
+   "applied": true,
+   "infra_failure": false,
+   "fail_to_pass_failed": 2,
+   "fail_to_pass_total": 3,
+   "pass_to_pass_failed": 0,
+   "pass_to_pass_total": 165
+  },
+  "django__django-11790": {
+   "resolved": true,
+   "applied": true,
+   "infra_failure": false,
+   "fail_to_pass_failed": 0,
+   "fail_to_pass_total": 2,
+   "pass_to_pass_failed": 0,
+   "pass_to_pass_total": 77
+  },
+  "django__django-12050": {
+   "resolved": true,
+   "applied": true,
+   "infra_failure": false,
+   "fail_to_pass_failed": 0,
+   "fail_to_pass_total": 1,
+   "pass_to_pass_failed": 0,
+   "pass_to_pass_total": 10
+  },
+  "django__django-12713": {
+   "resolved": true,
+   "applied": true,
+   "infra_failure": false,
+   "fail_to_pass_failed": 0,
+   "fail_to_pass_total": 1,
+   "pass_to_pass_failed": 0,
+   "pass_to_pass_total": 58
+  },
+  "django__django-12273": {
+   "resolved": false,
+   "applied": true,
+   "infra_failure": false,
+   "fail_to_pass_failed": 2,
+   "fail_to_pass_total": 2,
+   "pass_to_pass_failed": 0,
+   "pass_to_pass_total": 27
+  },
+  "sphinx-doc__sphinx-10466": {
+   "resolved": true,
+   "applied": true,
+   "infra_failure": false,
+   "fail_to_pass_failed": 0,
+   "fail_to_pass_total": 1,
+   "pass_to_pass_failed": 0,
+   "pass_to_pass_total": 6
+  },
+  "django__django-12143": {
+   "resolved": true,
+   "applied": true,
+   "infra_failure": false,
+   "fail_to_pass_failed": 0,
+   "fail_to_pass_total": 1,
+   "pass_to_pass_failed": 0,
+   "pass_to_pass_total": 52
+  },
+  "django__django-12155": {
+   "resolved": true,
+   "applied": true,
+   "infra_failure": false,
+   "fail_to_pass_failed": 0,
+   "fail_to_pass_total": 1,
+   "pass_to_pass_failed": 0,
+   "pass_to_pass_total": 6
+  },
+  "sphinx-doc__sphinx-7590": {
+   "resolved": false,
+   "applied": true,
+   "infra_failure": false,
+   "fail_to_pass_failed": 1,
+   "fail_to_pass_total": 1,
+   "pass_to_pass_failed": 0,
+   "pass_to_pass_total": 24
+  },
+  "django__django-12708": {
+   "resolved": true,
+   "applied": true,
+   "infra_failure": false,
+   "fail_to_pass_failed": 0,
+   "fail_to_pass_total": 1,
+   "pass_to_pass_failed": 0,
+   "pass_to_pass_total": 101
+  },
+  "sphinx-doc__sphinx-10435": {
+   "resolved": false,
+   "applied": true,
+   "infra_failure": false,
+   "fail_to_pass_failed": 1,
+   "fail_to_pass_total": 1,
+   "pass_to_pass_failed": 0,
+   "pass_to_pass_total": 74
+  },
+  "django__django-12276": {
+   "resolved": true,
+   "applied": true,
+   "infra_failure": false,
+   "fail_to_pass_failed": 0,
+   "fail_to_pass_total": 2,
+   "pass_to_pass_failed": 0,
+   "pass_to_pass_total": 117
+  },
+  "django__django-9296": {
+   "resolved": true,
+   "applied": true,
+   "infra_failure": false,
+   "fail_to_pass_failed": 0,
+   "fail_to_pass_total": 1,
+   "pass_to_pass_failed": 0,
+   "pass_to_pass_total": 20
+  },
+  "django__django-12308": {
+   "resolved": false,
+   "applied": true,
+   "infra_failure": false,
+   "fail_to_pass_failed": 2,
+   "fail_to_pass_total": 2,
+   "pass_to_pass_failed": 0,
+   "pass_to_pass_total": 20
+  }
+ },
+ "shadow": {}
+}

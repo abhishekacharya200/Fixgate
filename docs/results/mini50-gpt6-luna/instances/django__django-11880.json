@@ -1,0 +1,109 @@
+{
+ "task_id": "django__django-11880",
+ "issue": {
+  "repo": "django/django",
+  "title": "Form Field\u2019s __deepcopy__ does not (deep)copy the error messages.",
+  "body": "Form Field\u2019s __deepcopy__ does not (deep)copy the error messages.\nDescription\n\t\nThe __deepcopy__ method defined for the formfields (\u200bhttps://github.com/django/django/blob/146086f219d01dbb1cd8c089b5a5667e396e1cc4/django/forms/fields.py#L200) performs a shallow copy of self and does not include additional treatment for the error_messages dictionary. As a result, all copies of the same field share the same dictionary and any modification of either the dictionary or the error message itself for one formfield is immediately reflected on all other formfiels.\nThis is relevant for Forms and ModelForms that modify the error messages of their fields dynamically: while each instance of the specific form (e.g., ProfileForm) is expected to have a set of fields \u201csealed\u201d away from other instances of the same ProfileForm (\u200bhttps://github.com/django/django/blob/146086f219d01dbb1cd8c089b5a5667e396e1cc4/django/forms/forms.py#L95), in fact all these instances share the same error messages, resulting in incorrectly raised errors.\nConfirmed for versions of Django going back to 1.11.",
+  "number": null,
+  "url": null,
+  "labels": [],
+  "comments": [],
+  "author": null,
+  "ref": "django__django-11880"
+ },
+ "outcome": {
+  "category": "patch_ready",
+  "subcategory": "reproduced",
+  "phase": "verify",
+  "message": "Deep-copy each form field's error_messages dictionary when the field is copied.",
+  "span_id": null,
+  "details": {
+   "warnings": []
+  },
+  "blame": "none"
+ },
+ "triage": {
+  "kind": "bug",
+  "actionable": true,
+  "needs_more_info": false,
+  "severity": "medium",
+  "component": "Forms",
+  "summary": "Deep-copy form fields' error_messages so instances of the same form do not share mutable message dictionaries.",
+  "suggested_labels": [
+   "forms"
+  ],
+  "confidence": 0.96,
+  "evidence": "Field.__deepcopy__ shallow-copies self but leaves error_messages shared, so modifying one form instance's messages affects other instances; reported since Django 1.11."
+ },
+ "reproduction": {
+  "status": "verified",
+  "command": "python /tmp/fixgate/repro.py",
+  "script": "from django.conf import settings\nsettings.configure(USE_I18N=False)\n\nfrom django import forms\n\nclass ExampleForm(forms.Form):\n    name = forms.CharField(error_messages={'required': 'Please enter a name'})\n\nfirst = ExampleForm()\nsecond = ExampleForm()\nfirst.fields['name'].error_messages['required'] = 'Changed only on first'\nactual = second.fields['name'].error_messages['required']\nexpected = 'Please enter a name'\nprint('actual:', actual)\nprint('expected:', expected)\nassert actual == expected\n",
+  "exit_code": 1,
+  "output": "actual: Changed only on first\nexpected: Please enter a name\nTraceback (most recent call last):\n  File \"/tmp/fixgate/repro.py\", line 16, in <module>\n    assert actual == expected\nAssertionError\n",
+  "explanation": "Two instances of ExampleForm share field.error_messages: changing the required message in one changes the other; actual is Changed only on first, expected Please enter a name.",
+  "attempts": 1
+ },
+ "fix": {
+  "summary": "Deep-copy each form field's error_messages dictionary when the field is copied.",
+  "root_cause": "Field.__deepcopy__ shallow-copied the field, leaving error_messages shared between form instances.",
+  "test_command": "./tests/runtests.py forms_tests.field_tests --parallel 1",
+  "round": 1
+ },
+ "verification": {
+  "passed": true,
+  "repro_after": {
+   "exit_code": 0,
+   "output": "actual: Please enter a name\nexpected: Please enter a name\n"
+  },
+  "tests": {
+   "command": "./tests/runtests.py forms_tests.field_tests --parallel 1",
+   "exit_code": 0,
+   "passed": true,
+   "failures": [],
+   "baseline_exit_code": null,
+   "baseline_failures": [],
+   "new_failures": [],
+   "verdict": "passed",
+   "output": "............................................................................................................................................................................................\n----------------------------------------------------------------------\nRan 188 tests in 0.177s\n\nOK\nTesting against Django installed in '/testbed/django'\nSystem check identified no issues (0 silenced).\n"
+  },
+  "policy_violations": [],
+  "problems": [],
+  "warnings": []
+ },
+ "patch": "diff --git a/django/forms/fields.py b/django/forms/fields.py\nindex 03cd8af8d7..4cc3133ca0 100644\n--- a/django/forms/fields.py\n+++ b/django/forms/fields.py\n@@ -200,6 +200,7 @@ class Field:\n         memo[id(self)] = result\n         result.widget = copy.deepcopy(self.widget, memo)\n         result.validators = self.validators[:]\n+        result.error_messages = copy.deepcopy(self.error_messages, memo)\n         return result\n \n \n",
+ "gate_passed": true,
+ "usage": {
+  "llm_calls": 15,
+  "steps": 15,
+  "input_tokens": 60606,
+  "output_tokens": 847,
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 0,
+  "prompt_tokens": 60606,
+  "cost_usd": 0.006484,
+  "cost_cached_estimate_usd": 0.001579,
+  "cost_basis": "cached_estimate",
+  "usage_estimated_calls": 15,
+  "wall_s": 355.58,
+  "paused_s": 0.0
+ },
+ "stats": {
+  "tool:read_file": 1,
+  "tool:bash": 8,
+  "tool:write_file": 1,
+  "tool:report_reproduction": 1,
+  "tool:edit_file": 2,
+  "tool:submit_fix": 1,
+  "blocked_commands": 0,
+  "fix_rounds": 1
+ },
+ "model": "gpt-6-luna",
+ "provider": "openai",
+ "base_commit": "cfc14f1d68c3465d42d6ab287fe48303011aaaa8",
+ "trace_dir": "runs/mini50-gpt6-luna/traces/django__django-11880",
+ "approval_id": null,
+ "started_at": "2026-09-27T16:46:19+00:00",
+ "finished_at": "2026-09-27T16:52:13+00:00",
+ "patch_sha256": "019c53ab3ecb78ceeb386f79592d5f19633512e3863b5213566c90baf7e3038d"
+}

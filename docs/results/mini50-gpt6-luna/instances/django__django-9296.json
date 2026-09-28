@@ -1,0 +1,110 @@
+{
+ "task_id": "django__django-9296",
+ "issue": {
+  "repo": "django/django",
+  "title": "Paginator just implement the __iter__ function",
+  "body": "Paginator just implement the __iter__ function\nDescription\n\t \n\t\t(last modified by Alex Gaynor)\n\t \nRight now, when you want to iter into all the pages of a Paginator object you to use the page_range function. It would be more logical and naturel to use the normal python of doing that by implementing the iter function like that:\ndef __iter__(self):\n\tfor page_num in self.page_range:\n\t\tyield self.page(page_num)",
+  "number": null,
+  "url": null,
+  "labels": [],
+  "comments": [],
+  "author": null,
+  "ref": "django__django-9296"
+ },
+ "outcome": {
+  "category": "patch_ready",
+  "subcategory": "reproduced",
+  "phase": "verify",
+  "message": "Added Paginator.__iter__() to yield each Page in page_range.",
+  "span_id": null,
+  "details": {
+   "warnings": []
+  },
+  "blame": "none"
+ },
+ "triage": {
+  "kind": "feature",
+  "actionable": true,
+  "needs_more_info": false,
+  "severity": "low",
+  "component": "django.core.paginator",
+  "summary": "Add iteration support to Paginator so iterating it yields each Page in page_range.",
+  "suggested_labels": [
+   "feature"
+  ],
+  "confidence": 0.98,
+  "evidence": "Requests Paginator.__iter__ yielding self.page(page_num) across page_range."
+ },
+ "reproduction": {
+  "status": "verified",
+  "command": "python /tmp/fixgate/repro.py",
+  "script": "from django.core.paginator import Paginator\n\npaginator = Paginator([1, 2, 3], 1)\ntry:\n    actual = list(paginator)\nexcept TypeError as e:\n    actual = f\"{type(e).__name__}: {e}\"\nexpected = [[1], [2], [3]]\nprint('actual:', actual)\nprint('expected:', expected)\nassert actual == expected\n",
+  "exit_code": 1,
+  "output": "actual: TypeError: 'Paginator' object is not iterable\nexpected: [[1], [2], [3]]\nTraceback (most recent call last):\n  File \"/tmp/fixgate/repro.py\", line 11, in <module>\n    assert actual == expected\nAssertionError\n",
+  "explanation": "list(Paginator(...)) raises TypeError because Paginator does not implement iteration; expected pages are [[1], [2], [3]].",
+  "attempts": 1
+ },
+ "fix": {
+  "summary": "Added Paginator.__iter__() to yield each Page in page_range.",
+  "root_cause": "Paginator exposed page_range but had no iterator protocol method, so iter(paginator) raised TypeError.",
+  "test_command": "./tests/runtests.py pagination --parallel 1",
+  "round": 1
+ },
+ "verification": {
+  "passed": true,
+  "repro_after": {
+   "exit_code": 0,
+   "output": "actual: [[1], [2], [3]]\nexpected: [[1], [2], [3]]\n"
+  },
+  "tests": {
+   "command": "./tests/runtests.py pagination --parallel 1",
+   "exit_code": 0,
+   "passed": true,
+   "failures": [],
+   "baseline_exit_code": null,
+   "baseline_failures": [],
+   "new_failures": [],
+   "verdict": "passed",
+   "output": "Creating test database for alias 'default'...\n....................\n----------------------------------------------------------------------\nRan 20 tests in 0.013s\n\nOK\nDestroying test database for alias 'default'...\nTesting against Django installed in '/testbed/django'\nSystem check identified no issues (0 silenced).\n"
+  },
+  "policy_violations": [],
+  "problems": [],
+  "warnings": []
+ },
+ "patch": "diff --git a/django/core/paginator.py b/django/core/paginator.py\nindex 1f92da5d4f..c1cea6ee9f 100644\n--- a/django/core/paginator.py\n+++ b/django/core/paginator.py\n@@ -98,6 +98,11 @@ class Paginator:\n         hits = max(1, self.count - self.orphans)\n         return ceil(hits / self.per_page)\n \n+    def __iter__(self):\n+        \"\"\"Yield the pages in this paginator.\"\"\"\n+        for page_number in self.page_range:\n+            yield self.page(page_number)\n+\n     @property\n     def page_range(self):\n         \"\"\"\n",
+ "gate_passed": true,
+ "usage": {
+  "llm_calls": 14,
+  "steps": 14,
+  "input_tokens": 65037,
+  "output_tokens": 786,
+  "cache_read_tokens": 4864,
+  "cache_write_tokens": 0,
+  "prompt_tokens": 69901,
+  "cost_usd": 0.006945,
+  "cost_cached_estimate_usd": 0.001937,
+  "cost_basis": "cached_estimate",
+  "usage_estimated_calls": 13,
+  "wall_s": 236.15,
+  "paused_s": 0.0
+ },
+ "stats": {
+  "tool:read_file": 1,
+  "tool:write_file": 2,
+  "tool:bash": 6,
+  "tool:report_reproduction": 1,
+  "tool:edit_file": 1,
+  "idle_turns": 1,
+  "tool:submit_fix": 1,
+  "blocked_commands": 0,
+  "fix_rounds": 1
+ },
+ "model": "gpt-6-luna",
+ "provider": "openai",
+ "base_commit": "48563aa491268e70d8489ebc5a622b5b94f1a2d0",
+ "trace_dir": "runs/mini50-gpt6-luna/traces/django__django-9296",
+ "approval_id": null,
+ "started_at": "2026-09-27T18:03:37+00:00",
+ "finished_at": "2026-09-27T18:07:33+00:00",
+ "patch_sha256": "f404eaef73fde091d0d7435ec38cbde6e005fef94ec769d2b10f1bcdc5af8581"
+}

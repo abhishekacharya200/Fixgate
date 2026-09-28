@@ -1,0 +1,111 @@
+{
+ "task_id": "django__django-12713",
+ "issue": {
+  "repo": "django/django",
+  "title": "Allow overridding widget in formfield_for_manytomany().",
+  "body": "Allow overridding widget in formfield_for_manytomany().\nDescription\n\t \n\t\t(last modified by Mariusz Felisiak)\n\t \nIt does not work when I set widget param to function formfield_for_manytomany().\nThis is different from the formfield_for_foreignkey() function.",
+  "number": null,
+  "url": null,
+  "labels": [],
+  "comments": [],
+  "author": null,
+  "ref": "django__django-12713"
+ },
+ "outcome": {
+  "category": "patch_ready",
+  "subcategory": "reproduced",
+  "phase": "verify",
+  "message": "Updated formfield_for_manytomany() to use configured admin widgets only when no widget argument was provided, allowing explicit widget overrides.",
+  "span_id": null,
+  "details": {
+   "warnings": []
+  },
+  "blame": "none"
+ },
+ "triage": {
+  "kind": "bug",
+  "actionable": true,
+  "needs_more_info": false,
+  "severity": "low",
+  "component": "contrib.admin",
+  "summary": "Make formfield_for_manytomany() honor a widget override consistently with formfield_for_foreignkey().",
+  "suggested_labels": [
+   "contrib.admin",
+   "forms"
+  ],
+  "confidence": 0.91,
+  "evidence": "Reporter says widget passed to formfield_for_manytomany() does not work, unlike formfield_for_foreignkey()."
+ },
+ "reproduction": {
+  "status": "verified",
+  "command": "python /tmp/fixgate/repro.py",
+  "script": "from django.conf import settings\nsettings.configure(USE_I18N=False)\nfrom types import SimpleNamespace\nfrom django.contrib.admin.options import ModelAdmin\n\nclass Field:\n    name = 'items'\n    verbose_name = 'items'\n    remote_field = SimpleNamespace(through=SimpleNamespace(_meta=SimpleNamespace(auto_created=True)))\n    def formfield(self, **kwargs):\n        return SimpleNamespace(widget=kwargs.get('widget'), help_text='')\n\nclass Admin(ModelAdmin):\n    filter_horizontal = ('items',)\n    filter_vertical = raw_id_fields = ()\n    def get_autocomplete_fields(self, request):\n        return ()\n    def get_field_queryset(self, db, field, request):\n        return None\n\ncustom_widget = object()\nadmin = Admin.__new__(Admin)\nactual = admin.formfield_for_manytomany(Field(), None, widget=custom_widget).widget\nprint('actual:', actual)\nprint('expected:', custom_widget)\nassert actual is custom_widget\n",
+  "exit_code": 1,
+  "output": "actual: <django.contrib.admin.widgets.FilteredSelectMultiple object at 0x72ad217ba3c8>\nexpected: <object object at 0x72ad21b58620>\nTraceback (most recent call last):\n  File \"/tmp/fixgate/repro.py\", line 26, in <module>\n    assert actual is custom_widget\nAssertionError\n",
+  "explanation": "Reproduced: setting widget=custom_widget returns FilteredSelectMultiple instead, then assertion fails.",
+  "attempts": 1
+ },
+ "fix": {
+  "summary": "Updated formfield_for_manytomany() to use configured admin widgets only when no widget argument was provided, allowing explicit widget overrides.",
+  "root_cause": "The method unconditionally replaced kwargs['widget'] for autocomplete, raw-id, and filtered fields, unlike formfield_for_foreignkey(), which only supplies a default when widget is absent.",
+  "test_command": "./tests/runtests.py modeladmin --parallel 1",
+  "round": 1
+ },
+ "verification": {
+  "passed": true,
+  "repro_after": {
+   "exit_code": 0,
+   "output": "actual: <object object at 0x71dc0b802620>\nexpected: <object object at 0x71dc0b802620>\n"
+  },
+  "tests": {
+   "command": "./tests/runtests.py modeladmin --parallel 1",
+   "exit_code": 0,
+   "passed": true,
+   "failures": [],
+   "baseline_exit_code": null,
+   "baseline_failures": [],
+   "new_failures": [],
+   "verdict": "passed",
+   "output": "Creating test database for alias 'default'...\n............................................................................................................................................................\n----------------------------------------------------------------------\nRan 156 tests in 0.162s\n\nOK\nDestroying test database for alias 'default'...\nTesting against Django installed in '/testbed/django'\nSystem check identified no issues (0 silenced).\n"
+  },
+  "policy_violations": [],
+  "problems": [],
+  "warnings": []
+ },
+ "patch": "diff --git a/django/contrib/admin/options.py b/django/contrib/admin/options.py\nindex 69a5fbf389..b3c4020f39 100644\n--- a/django/contrib/admin/options.py\n+++ b/django/contrib/admin/options.py\n@@ -250,15 +250,16 @@ class BaseModelAdmin(metaclass=forms.MediaDefiningClass):\n         db = kwargs.get('using')\n \n         autocomplete_fields = self.get_autocomplete_fields(request)\n-        if db_field.name in autocomplete_fields:\n-            kwargs['widget'] = AutocompleteSelectMultiple(db_field.remote_field, self.admin_site, using=db)\n-        elif db_field.name in self.raw_id_fields:\n-            kwargs['widget'] = widgets.ManyToManyRawIdWidget(db_field.remote_field, self.admin_site, using=db)\n-        elif db_field.name in [*self.filter_vertical, *self.filter_horizontal]:\n-            kwargs['widget'] = widgets.FilteredSelectMultiple(\n-                db_field.verbose_name,\n-                db_field.name in self.filter_vertical\n-            )\n+        if 'widget' not in kwargs:\n+            if db_field.name in autocomplete_fields:\n+                kwargs['widget'] = AutocompleteSelectMultiple(db_field.remote_field, self.admin_site, using=db)\n+            elif db_field.name in self.raw_id_fields:\n+                kwargs['widget'] = widgets.ManyToManyRawIdWidget(db_field.remote_field, self.admin_site, using=db)\n+            elif db_field.name in [*self.filter_vertical, *self.filter_horizontal]:\n+                kwargs['widget'] = widgets.FilteredSelectMultiple(\n+                    db_field.verbose_name,\n+                    db_field.name in self.filter_vertical\n+                )\n \n         if 'queryset' not in kwargs:\n             queryset = self.get_field_queryset(db, db_field, request)\n",
+ "gate_passed": true,
+ "usage": {
+  "llm_calls": 15,
+  "steps": 15,
+  "input_tokens": 60155,
+  "output_tokens": 1090,
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 0,
+  "prompt_tokens": 60155,
+  "cost_usd": 0.006561,
+  "cost_cached_estimate_usd": 0.001705,
+  "cost_basis": "cached_estimate",
+  "usage_estimated_calls": 15,
+  "wall_s": 341.37,
+  "paused_s": 0.0
+ },
+ "stats": {
+  "tool:search_code": 1,
+  "tool:read_file": 1,
+  "tool:bash": 8,
+  "invalid_calls": 1,
+  "tool:report_reproduction": 1,
+  "tool:edit_file": 1,
+  "tool:submit_fix": 1,
+  "blocked_commands": 0,
+  "fix_rounds": 1
+ },
+ "model": "gpt-6-luna",
+ "provider": "openai",
+ "base_commit": "90e048cf4d9eabc8b87272b8f277ef84b725ea6f",
+ "trace_dir": "runs/mini50-gpt6-luna/traces/django__django-12713",
+ "approval_id": null,
+ "started_at": "2026-09-27T17:53:54+00:00",
+ "finished_at": "2026-09-27T17:59:35+00:00",
+ "patch_sha256": "b2ed6e5160772ae2fe006c0ba7dab14112b35a0ef0fe01b04101c6b585948c23"
+}

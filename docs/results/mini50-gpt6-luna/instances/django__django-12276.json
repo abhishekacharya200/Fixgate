@@ -1,0 +1,110 @@
+{
+ "task_id": "django__django-12276",
+ "issue": {
+  "repo": "django/django",
+  "title": "FileInput shouldn't display required attribute when initial data exists.",
+  "body": "FileInput shouldn't display required attribute when initial data exists.\nDescription\n\t \n\t\t(last modified by thenewguy)\n\t \nI think that ClearableFileInput.use_required_attribute() (\u200bhttps://github.com/django/django/blob/e703b93a656b78b9b444bb3a9980e305ed002a70/django/forms/widgets.py#L454) should be moved to FileInput.use_required_attribute() so that required is not output on the html input element that represents FileInput when a file is already set (e.g. already saved on a model instance that is being edited).\nMaybe I am overlooking a use case where this is not desirable? I can not think of one.",
+  "number": null,
+  "url": null,
+  "labels": [],
+  "comments": [],
+  "author": null,
+  "ref": "django__django-12276"
+ },
+ "outcome": {
+  "category": "patch_ready",
+  "subcategory": "reproduced",
+  "phase": "verify",
+  "message": "Moved the existing initial-value check from ClearableFileInput to FileInput, so required file inputs omit the required attribute when a file is already set.",
+  "span_id": null,
+  "details": {
+   "warnings": []
+  },
+  "blame": "none"
+ },
+ "triage": {
+  "kind": "bug",
+  "actionable": true,
+  "needs_more_info": false,
+  "severity": "low",
+  "component": "Forms",
+  "summary": "FileInput renders the required attribute even when a file is already present as initial data, preventing valid form submission without choosing a replacement file.",
+  "suggested_labels": [
+   "Forms",
+   "HTML"
+  ],
+  "confidence": 0.97,
+  "evidence": "The report identifies ClearableFileInput.use_required_attribute() and asks to apply the existing behavior to FileInput when initial data includes an already-set file."
+ },
+ "reproduction": {
+  "status": "verified",
+  "command": "python /tmp/fixgate/repro.py",
+  "script": "from django.forms.widgets import FileInput, ClearableFileInput\n\ninitial = 'existing-file.pdf'\nactual = FileInput().use_required_attribute(initial)\nexpected = False\nprint('actual:', actual)\nprint('expected:', expected)\nassert actual == expected\n",
+  "exit_code": 1,
+  "output": "actual: True\nexpected: False\nTraceback (most recent call last):\n  File \"/tmp/fixgate/repro.py\", line 8, in <module>\n    assert actual == expected\nAssertionError\n",
+  "explanation": "Confirmed FileInput.use_required_attribute('existing-file.pdf') returns True, but it should be False when an initial file exists.",
+  "attempts": 1
+ },
+ "fix": {
+  "summary": "Moved the existing initial-value check from ClearableFileInput to FileInput, so required file inputs omit the required attribute when a file is already set.",
+  "root_cause": "The required-attribute override was only defined on ClearableFileInput, leaving plain FileInput to inherit the default behavior even when initial data existed.",
+  "test_command": "./tests/runtests.py forms_tests.widget_tests.test_fileinput forms_tests.widget_tests.test_clearablefileinput --parallel 1",
+  "round": 1
+ },
+ "verification": {
+  "passed": true,
+  "repro_after": {
+   "exit_code": 0,
+   "output": "actual: False\nexpected: False\n"
+  },
+  "tests": {
+   "command": "./tests/runtests.py forms_tests.widget_tests.test_fileinput forms_tests.widget_tests.test_clearablefileinput --parallel 1",
+   "exit_code": 0,
+   "passed": true,
+   "failures": [],
+   "baseline_exit_code": null,
+   "baseline_failures": [],
+   "new_failures": [],
+   "verdict": "passed",
+   "output": "..............\n----------------------------------------------------------------------\nRan 14 tests in 0.040s\n\nOK\nTesting against Django installed in '/testbed/django'\nSystem check identified no issues (0 silenced).\n"
+  },
+  "policy_violations": [],
+  "problems": [],
+  "warnings": []
+ },
+ "patch": "diff --git a/django/forms/widgets.py b/django/forms/widgets.py\nindex 338d54d72f..e9f2e47d60 100644\n--- a/django/forms/widgets.py\n+++ b/django/forms/widgets.py\n@@ -387,6 +387,9 @@ class FileInput(Input):\n     def value_omitted_from_data(self, data, files, name):\n         return name not in files\n \n+    def use_required_attribute(self, initial):\n+        return super().use_required_attribute(initial) and not initial\n+\n \n FILE_INPUT_CONTRADICTION = object()\n \n",
+ "gate_passed": true,
+ "usage": {
+  "llm_calls": 12,
+  "steps": 12,
+  "input_tokens": 53208,
+  "output_tokens": 768,
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 0,
+  "prompt_tokens": 53208,
+  "cost_usd": 0.005705,
+  "cost_cached_estimate_usd": 0.001613,
+  "cost_basis": "cached_estimate",
+  "usage_estimated_calls": 12,
+  "wall_s": 271.91,
+  "paused_s": 0.0
+ },
+ "stats": {
+  "tool:search_code": 1,
+  "tool:read_file": 1,
+  "tool:bash": 6,
+  "tool:report_reproduction": 1,
+  "tool:edit_file": 1,
+  "tool:submit_fix": 1,
+  "blocked_commands": 0,
+  "fix_rounds": 1
+ },
+ "model": "gpt-6-luna",
+ "provider": "openai",
+ "base_commit": "e166dbf0e071fca353376507114883455a845b03",
+ "trace_dir": "runs/mini50-gpt6-luna/traces/django__django-12276",
+ "approval_id": null,
+ "started_at": "2026-09-27T17:35:09+00:00",
+ "finished_at": "2026-09-27T17:39:41+00:00",
+ "patch_sha256": "f5ba2e63ca61415dea65904c64f3f079dfc55e751c5f4e245839df9d2520aebc"
+}

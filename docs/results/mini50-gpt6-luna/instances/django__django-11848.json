@@ -1,0 +1,111 @@
+{
+ "task_id": "django__django-11848",
+ "issue": {
+  "repo": "django/django",
+  "title": "django.utils.http.parse_http_date two digit year check is incorrect",
+  "body": "django.utils.http.parse_http_date two digit year check is incorrect\nDescription\n\t \n\t\t(last modified by Ad Timmering)\n\t \nRFC 850 does not mention this, but in RFC 7231 (and there's something similar in RFC 2822), there's the following quote:\nRecipients of a timestamp value in rfc850-date format, which uses a\ntwo-digit year, MUST interpret a timestamp that appears to be more\nthan 50 years in the future as representing the most recent year in\nthe past that had the same last two digits.\nCurrent logic is hard coded to consider 0-69 to be in 2000-2069, and 70-99 to be 1970-1999, instead of comparing versus the current year.",
+  "number": null,
+  "url": null,
+  "labels": [],
+  "comments": [],
+  "author": null,
+  "ref": "django__django-11848"
+ },
+ "outcome": {
+  "category": "patch_ready",
+  "subcategory": "reproduced",
+  "phase": "verify",
+  "message": "Updated RFC850 two-digit year interpretation to choose a year relative to the current year and roll back a century only when it is more than 50 years ahead.",
+  "span_id": null,
+  "details": {
+   "warnings": []
+  },
+  "blame": "none"
+ },
+ "triage": {
+  "kind": "bug",
+  "actionable": true,
+  "needs_more_info": false,
+  "severity": "low",
+  "component": "django.utils.http",
+  "summary": "parse_http_date interprets two-digit years using fixed ranges instead of the RFC-required rule based on whether the date is more than 50 years in the future.",
+  "suggested_labels": [
+   "bug",
+   "HTTP"
+  ],
+  "confidence": 0.97,
+  "evidence": "The issue says parse_http_date hard-codes years 00\u201369 to 2000\u20132069 and 70\u201399 to 1970\u20131999, rather than applying RFC 7231's rolling 50-year interpretation."
+ },
+ "reproduction": {
+  "status": "verified",
+  "command": "python /tmp/fixgate/repro.py",
+  "script": "import datetime\nfrom django.utils.http import parse_http_date\n\n# Verify RFC850 year rolling relative to current year. A date exactly 50 years\n# ahead is not more than 50 years in the future.\ncurrent_year = datetime.datetime.utcnow().year\nexpected_year = current_year + 50\nshort_year = expected_year % 100\ndate = 'Sunday, 01-Jan-%02d 00:00:00 GMT' % short_year\nactual = datetime.datetime.utcfromtimestamp(parse_http_date(date)).year\nprint('actual:', actual, 'expected:', expected_year)\nassert actual == expected_year\n",
+  "exit_code": 1,
+  "output": "actual: 1976 expected: 2076\nTraceback (most recent call last):\n  File \"/tmp/fixgate/repro.py\", line 12, in <module>\n    assert actual == expected_year\nAssertionError\n",
+  "explanation": "Reproduced: for the current year plus 50, parsing RFC850 date returned 1976 (fixed pivot) instead of 2076.",
+  "attempts": 1
+ },
+ "fix": {
+  "summary": "Updated RFC850 two-digit year interpretation to choose a year relative to the current year and roll back a century only when it is more than 50 years ahead.",
+  "root_cause": "The parser used a fixed 70/00 pivot, which becomes incorrect as time advances and does not implement RFC 7231's rolling 50-year rule.",
+  "test_command": "./tests/runtests.py utils_tests.test_http --parallel 1",
+  "round": 1
+ },
+ "verification": {
+  "passed": true,
+  "repro_after": {
+   "exit_code": 0,
+   "output": "actual: 2076 expected: 2076\n"
+  },
+  "tests": {
+   "command": "./tests/runtests.py utils_tests.test_http --parallel 1",
+   "exit_code": 0,
+   "passed": true,
+   "failures": [],
+   "baseline_exit_code": null,
+   "baseline_failures": [],
+   "new_failures": [],
+   "verdict": "passed",
+   "output": ".............................................\n----------------------------------------------------------------------\nRan 45 tests in 0.004s\n\nOK\nTesting against Django installed in '/testbed/django'\nSystem check identified no issues (0 silenced).\n"
+  },
+  "policy_violations": [],
+  "problems": [],
+  "warnings": []
+ },
+ "patch": "diff --git a/django/utils/http.py b/django/utils/http.py\nindex 572cfb4347..29b9797403 100755\n--- a/django/utils/http.py\n+++ b/django/utils/http.py\n@@ -176,10 +176,10 @@ def parse_http_date(date):\n     try:\n         year = int(m.group('year'))\n         if year < 100:\n-            if year < 70:\n-                year += 2000\n-            else:\n-                year += 1900\n+            current_year = datetime.datetime.utcnow().year\n+            year += current_year // 100 * 100\n+            if year - current_year > 50:\n+                year -= 100\n         month = MONTHS.index(m.group('mon').lower()) + 1\n         day = int(m.group('day'))\n         hour = int(m.group('hour'))\n",
+ "gate_passed": true,
+ "usage": {
+  "llm_calls": 13,
+  "steps": 13,
+  "input_tokens": 59617,
+  "output_tokens": 932,
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 0,
+  "prompt_tokens": 59617,
+  "cost_usd": 0.006428,
+  "cost_cached_estimate_usd": 0.001612,
+  "cost_basis": "cached_estimate",
+  "usage_estimated_calls": 13,
+  "wall_s": 353.31,
+  "paused_s": 0.0
+ },
+ "stats": {
+  "tool:bash": 7,
+  "invalid_calls": 1,
+  "blocked:interactive": 1,
+  "tool:write_file": 1,
+  "tool:report_reproduction": 1,
+  "tool:edit_file": 1,
+  "tool:submit_fix": 1,
+  "blocked_commands": 1,
+  "fix_rounds": 1
+ },
+ "model": "gpt-6-luna",
+ "provider": "openai",
+ "base_commit": "6a374674a0768e9234e87ee286127f4cac412a14",
+ "trace_dir": "runs/mini50-gpt6-luna/traces/django__django-11848",
+ "approval_id": null,
+ "started_at": "2026-09-27T16:40:25+00:00",
+ "finished_at": "2026-09-27T16:46:18+00:00",
+ "patch_sha256": "6b5996cb0f1dffa260c31bac4940cb8a816c059214d07cf2cdadfcaf3f565143"
+}

@@ -1,0 +1,112 @@
+{
+ "task_id": "django__django-12273",
+ "issue": {
+  "repo": "django/django",
+  "title": "Resetting primary key for a child model doesn't work.",
+  "body": "Resetting primary key for a child model doesn't work.\nDescription\n\t\nIn the attached example code setting the primary key to None does not work (so that the existing object is overwritten on save()).\nThe most important code fragments of the bug example:\nfrom django.db import models\nclass Item(models.Model):\n\t# uid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)\n\tuid = models.AutoField(primary_key=True, editable=False)\n\tf = models.BooleanField(default=False)\n\tdef reset(self):\n\t\tself.uid = None\n\t\tself.f = False\nclass Derived(Item):\n\tpass\nclass SaveTestCase(TestCase):\n\tdef setUp(self):\n\t\tself.derived = Derived.objects.create(f=True) # create the first object\n\t\titem = Item.objects.get(pk=self.derived.pk)\n\t\tobj1 = item.derived\n\t\tobj1.reset()\n\t\tobj1.save() # the first object is overwritten\n\tdef test_f_true(self):\n\t\tobj = Item.objects.get(pk=self.derived.pk)\n\t\tself.assertTrue(obj.f)\nDjango 2.1.2",
+  "number": null,
+  "url": null,
+  "labels": [],
+  "comments": [],
+  "author": null,
+  "ref": "django__django-12273"
+ },
+ "outcome": {
+  "category": "patch_ready",
+  "subcategory": "reproduced",
+  "phase": "verify",
+  "message": "Prevent parent PK synchronization from restoring a cleared child primary key during save.",
+  "span_id": null,
+  "details": {
+   "warnings": []
+  },
+  "blame": "none"
+ },
+ "triage": {
+  "kind": "bug",
+  "actionable": true,
+  "needs_more_info": false,
+  "severity": "medium",
+  "component": "Database models (multi-table inheritance)",
+  "summary": "Saving a child model instance after clearing its primary key updates the existing inherited row rather than inserting a new object.",
+  "suggested_labels": [
+   "bug",
+   "models",
+   "multi-table-inheritance"
+  ],
+  "confidence": 0.93,
+  "evidence": "The report provides a minimal reproducer using a Derived child model; assigning uid=None then saving updates/overwrites the existing parent row instead of creating a new object."
+ },
+ "reproduction": {
+  "status": "verified",
+  "command": "python /tmp/fixgate/repro.py",
+  "script": "from django.conf import settings\nsettings.configure(\n    DATABASES={\"default\": {\"ENGINE\": \"django.db.backends.sqlite3\", \"NAME\": \":memory:\"}},\n    INSTALLED_APPS=[],\n    SECRET_KEY=\"x\",\n)\nimport django\ndjango.setup()\nfrom django.db import connection, models\n\nclass Item(models.Model):\n    uid = models.AutoField(primary_key=True, editable=False)\n    f = models.BooleanField(default=False)\n    class Meta:\n        app_label = \"repro\"\n\nclass Derived(Item):\n    class Meta:\n        app_label = \"repro\"\n\nwith connection.schema_editor() as editor:\n    editor.create_model(Item)\n    editor.create_model(Derived)\n\nderived = Derived.objects.create(f=True)\nold_pk = derived.pk\nitem = Item.objects.get(pk=old_pk)\nobj = item.derived\nobj.uid = None\nobj.f = False\nobj.save()\nactual = Item.objects.get(pk=old_pk).f\nexpected = True\nprint(\"actual:\", actual, \"expected:\", expected)\nassert actual == expected\n",
+  "exit_code": 1,
+  "output": "actual: False expected: True\nTraceback (most recent call last):\n  File \"/tmp/fixgate/repro.py\", line 35, in <module>\n    assert actual == expected\nAssertionError\n",
+  "explanation": "Reproduced: after clearing the derived instance's uid and saving, the base Item row's f becomes False (actual False, expected True), showing the existing inherited row was updated.",
+  "attempts": 1
+ },
+ "fix": {
+  "summary": "Prevent parent PK synchronization from restoring a cleared child primary key during save.",
+  "root_cause": "_save_parents copied the inherited link-field value back to the parent PK whenever it was None, even when the instance wasn't being added. This made the parent row update instead of creating a new inheritance chain.",
+  "test_command": "./tests/runtests.py model_inheritance --parallel 1",
+  "round": 1
+ },
+ "verification": {
+  "passed": true,
+  "repro_after": {
+   "exit_code": 0,
+   "output": "actual: True expected: True\n"
+  },
+  "tests": {
+   "command": "./tests/runtests.py model_inheritance --parallel 1",
+   "exit_code": 0,
+   "passed": true,
+   "failures": [],
+   "baseline_exit_code": null,
+   "baseline_failures": [],
+   "new_failures": [],
+   "verdict": "passed",
+   "output": "Creating test database for alias 'default'...\n..............................................\n----------------------------------------------------------------------\nRan 46 tests in 0.114s\n\nOK\nDestroying test database for alias 'default'...\nTesting against Django installed in '/testbed/django'\nSystem check identified no issues (0 silenced).\n"
+  },
+  "policy_violations": [],
+  "problems": [],
+  "warnings": []
+ },
+ "patch": "diff --git a/django/db/models/base.py b/django/db/models/base.py\nindex 844c01e95e..2e573c59a2 100644\n--- a/django/db/models/base.py\n+++ b/django/db/models/base.py\n@@ -804,7 +804,8 @@ class Model(metaclass=ModelBase):\n         inserted = False\n         for parent, field in meta.parents.items():\n             # Make sure the link fields are synced between parent and self.\n-            if (field and getattr(self, parent._meta.pk.attname) is None and\n+            if (self._state.adding and field and\n+                    getattr(self, parent._meta.pk.attname) is None and\n                     getattr(self, field.attname) is not None):\n                 setattr(self, parent._meta.pk.attname, getattr(self, field.attname))\n             parent_inserted = self._save_parents(cls=parent, using=using, update_fields=update_fields)\n",
+ "gate_passed": true,
+ "usage": {
+  "llm_calls": 18,
+  "steps": 18,
+  "input_tokens": 82532,
+  "output_tokens": 898,
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 0,
+  "prompt_tokens": 82532,
+  "cost_usd": 0.008702,
+  "cost_cached_estimate_usd": 0.001931,
+  "cost_basis": "cached_estimate",
+  "usage_estimated_calls": 18,
+  "wall_s": 376.32,
+  "paused_s": 0.0
+ },
+ "stats": {
+  "invalid_calls": 5,
+  "tool:bash": 7,
+  "tool:read_file": 1,
+  "tool:write_file": 1,
+  "tool:report_reproduction": 1,
+  "tool:edit_file": 1,
+  "tool:submit_fix": 1,
+  "blocked_commands": 0,
+  "fix_rounds": 1
+ },
+ "model": "gpt-6-luna",
+ "provider": "openai",
+ "base_commit": "73da681e053f70bfa206afd20d4db0ab8530ede8",
+ "trace_dir": "runs/mini50-gpt6-luna/traces/django__django-12273",
+ "approval_id": null,
+ "started_at": "2026-09-27T17:28:53+00:00",
+ "finished_at": "2026-09-27T17:35:09+00:00",
+ "patch_sha256": "2f5de3fde4e6c8981d84984ae78a31645a69044867e30fbc4e8d58c450b8e845"
+}

@@ -1,0 +1,76 @@
+# Copy to fixgate.toml (or ~/.fixgate/fixgate.toml) and adjust. Every key is optional.
+# Unknown keys are rejected, so a typo cannot silently switch a guardrail off.
+
+[llm]
+provider = "anthropic"                    # anthropic | openai | gemini
+model = "claude-haiku-4-5-20251001"
+# triage_model = "claude-haiku-4-5-20251001"
+# Development: the local RAG gateway (subscription CLIs). Production: set base_url = "" and put a real
+# key in the variable named by api_key_env.
+base_url = "http://127.0.0.1:8787"
+api_key_env = "FIXGATE_LLM_API_KEY"
+max_output_tokens = 8192
+thinking = "off"                          # off | adaptive | a token budget such as "4000"
+# effort = "high"                         # Anthropic output_config.effort
+history_format = "auto"                   # auto | native | prose (see README: gateway notes)
+
+[retry]
+max_attempts = 6
+base_delay_s = 2.0
+max_delay_s = 60.0
+rate_limit_max_wait_s = 21600             # wait up to 6 h for a subscription window to reset
+
+[budget]                                  # per task; the first limit reached stops the task
+max_cost_usd = 2.00
+max_steps = 80
+max_input_tokens = 4000000
+max_output_tokens = 150000
+max_wall_s = 2700
+warn_fraction = 0.8
+
+[sandbox]
+image = "python:3.12"                     # live mode default image
+workdir = "/workspace"
+memory = "3g"
+cpus = 2.0
+pids_limit = 1024
+exec_timeout_s = 180
+max_exec_timeout_s = 900
+
+[agent]
+max_fix_rounds = 3
+max_repro_rounds = 3
+max_blocked_commands = 6
+stuck_repeat_limit = 4
+require_reproduction = false
+
+[policy]
+max_files_changed = 10
+max_lines_changed = 500
+forbidden_paths = [".github/**", ".git/**", "**/.env", "**/*.pem", "**/*.key", "**/id_rsa*", ".gitlab-ci.yml"]
+block_test_tampering = true
+
+[approval]
+expires_hours = 72
+
+[github]
+token_env = "GITHUB_TOKEN"                # falls back to `gh auth token`
+push_to = "fork"                          # fork | origin
+draft = true
+branch_prefix = "fixgate/"
+watch_label = "fixgate"
+# commit_name = "Your Name"
+# commit_email = "you@users.noreply.github.com"
+
+# How to build and test a repository in live mode. Setup commands run with network access, before the
+# agent starts; the network is cut afterwards.
+[repos."owner/project"]
+image = "python:3.12"
+setup = ["python -m venv /tmp/venv && . /tmp/venv/bin/activate && pip install -q -e '.[test]'"]
+env_setup = ". /tmp/venv/bin/activate"
+test_hint = "Run tests with `pytest tests/ -q`."
+
+# Prices for models fixgate does not know (USD per million tokens).
+# [pricing."my-model"]
+# input = 1.0
+# output = 4.0

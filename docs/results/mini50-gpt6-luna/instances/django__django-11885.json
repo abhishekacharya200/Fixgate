@@ -1,0 +1,113 @@
+{
+ "task_id": "django__django-11885",
+ "issue": {
+  "repo": "django/django",
+  "title": "Combine fast delete queries",
+  "body": "Combine fast delete queries\nDescription\n\t\nWhen emulating ON DELETE CASCADE via on_delete=models.CASCADE the deletion.Collector will try to perform fast queries which are DELETE FROM table WHERE table.pk IN .... There's a few conditions required for this fast path to be taken but when this happens the collection logic should combine such queries by table to reduce the number of roundtrips to the database.\nFor example, given the following models\nclass Person(models.Model):\n\tfriends = models.ManyToManyField('self')\nclass User(models.Model):\n\tpass\nclass Entry(models.Model):\n\tcreated_by = models.ForeignKey(User)\n\tupdated_by = models.ForeignKey(User)\nIssuing a person.delete() or user.delete() will result in 3 queries of the form\nDELETE FROM person_friends WHERE from_id = :id\nDELETE FROM person_friends WHERE to_id = :id\nDELETE FROM person WHERE id = :id\nDELETE FROM entry WHERE created_by_id = :id\nDELETE FROM entry WHERE updated_by = :id\nDELETRE FROM user WHERE id = :id\nBut both queries (or N queries depending on the number of foreign relationships) can be combined into a single one by using OR\nDELETE FROM person_friends WHERE from_id = :id OR to_id = :id\nDELETE FROM person WHERE id = :id\nDELETE FROM entry WHERE created_by_id = :id OR updated_by = :id\nDELETE FROM user WHERE id = :id",
+  "number": null,
+  "url": null,
+  "labels": [],
+  "comments": [],
+  "author": null,
+  "ref": "django__django-11885"
+ },
+ "outcome": {
+  "category": "patch_ready",
+  "subcategory": "reproduced",
+  "phase": "verify",
+  "message": "Grouped fast-delete querysets by model and OR-combined predicates from distinct FK fields, while retaining same-field batches to respect backend parameter limits.",
+  "span_id": null,
+  "details": {
+   "warnings": []
+  },
+  "blame": "none"
+ },
+ "triage": {
+  "kind": "feature",
+  "actionable": true,
+  "needs_more_info": false,
+  "severity": "low",
+  "component": "django.db.models.deletion (DeletionCollector / ORM query execution)",
+  "summary": "Combine fast-delete queries targeting the same table into one DELETE with OR-combined predicates.",
+  "suggested_labels": [
+   "Database layer (models, ORM)",
+   "Performance"
+  ],
+  "confidence": 0.97,
+  "evidence": "The issue describes repeated fast-path DELETE queries for the same table and proposes combining predicates with OR to reduce database roundtrips."
+ },
+ "reproduction": {
+  "status": "verified",
+  "command": "python /tmp/fixgate/repro.py",
+  "script": "from django.conf import settings\nsettings.configure(\n    SECRET_KEY='x',\n    INSTALLED_APPS=['tests.delete'],\n    DATABASES={'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': ':memory:'}},\n)\nimport django\ndjango.setup()\nfrom django.db import connection\nfrom django.test.utils import CaptureQueriesContext\nfrom tests.delete.models import Referrer, SecondReferrer\n\nfrom tests.delete.models import Origin\nwith connection.schema_editor() as editor:\n    editor.create_model(Origin)\n    editor.create_model(Referrer)\n    editor.create_model(SecondReferrer)\norigin = Origin.objects.create()\nreferrer = Referrer.objects.create(origin=origin, unique_field=1, large_field='x')\nSecondReferrer.objects.create(referrer=referrer, other_referrer=referrer)\nwith CaptureQueriesContext(connection) as queries:\n    referrer.delete()\ndeletes = [q['sql'] for q in queries if q['sql'].startswith('DELETE') and 'secondreferrer' in q['sql']]\nprint('actual:', deletes)\nprint('expected: one DELETE for SecondReferrer')\nassert len(deletes) == 1\n",
+  "exit_code": 1,
+  "output": "actual: ['DELETE FROM \"delete_secondreferrer\" WHERE \"delete_secondreferrer\".\"referrer_id\" IN (1)', 'DELETE FROM \"delete_secondreferrer\" WHERE \"delete_secondreferrer\".\"other_referrer_id\" IN (1)']\nexpected: one DELETE for SecondReferrer\nTraceback (most recent call last):\n  File \"/tmp/fixgate/repro.py\", line 26, in <module>\n    assert len(deletes) == 1\nAssertionError\n",
+  "explanation": "Reproduced: deleting a Referrer with both SecondReferrer CASCADE foreign keys emits two DELETE statements against delete_secondreferrer instead of one.",
+  "attempts": 1
+ },
+ "fix": {
+  "summary": "Grouped fast-delete querysets by model and OR-combined predicates from distinct FK fields, while retaining same-field batches to respect backend parameter limits.",
+  "root_cause": "Collector accumulated each cascade's fast-delete queryset independently, causing multiple DELETE statements per table. Batch boundaries for a given field must remain intact to avoid oversized parameter lists.",
+  "test_command": "./tests/runtests.py delete.tests --parallel 1",
+  "round": 1
+ },
+ "verification": {
+  "passed": true,
+  "repro_after": {
+   "exit_code": 0,
+   "output": "actual: ['DELETE FROM \"delete_secondreferrer\" WHERE (\"delete_secondreferrer\".\"referrer_id\" IN (1) OR \"delete_secondreferrer\".\"other_referrer_id\" IN (1))']\nexpected: one DELETE for SecondReferrer\n"
+  },
+  "tests": {
+   "command": "./tests/runtests.py delete.tests --parallel 1",
+   "exit_code": 0,
+   "passed": true,
+   "failures": [],
+   "baseline_exit_code": null,
+   "baseline_failures": [],
+   "new_failures": [],
+   "verdict": "passed",
+   "output": "Creating test database for alias 'default'...\n..s.........................................\n----------------------------------------------------------------------\nRan 44 tests in 0.758s\n\nOK (skipped=1)\nDestroying test database for alias 'default'...\nTesting against Django installed in '/testbed/django'\nSystem check identified no issues (0 silenced).\n"
+  },
+  "policy_violations": [],
+  "problems": [],
+  "warnings": []
+ },
+ "patch": "diff --git a/django/db/models/deletion.py b/django/db/models/deletion.py\nindex ae82d26340..8a32cab215 100644\n--- a/django/db/models/deletion.py\n+++ b/django/db/models/deletion.py\n@@ -310,9 +310,28 @@ class Collector:\n                     )\n \n             # fast deletes\n+            fast_deletes = {}\n             for qs in self.fast_deletes:\n-                count = qs._raw_delete(using=self.using)\n-                deleted_counter[qs.model._meta.label] += count\n+                fast_deletes.setdefault(qs.model, []).append(qs)\n+            for model, querysets in fast_deletes.items():\n+                # Combine deletes for different fields, preserving batches for\n+                # the same field to avoid exceeding backend parameter limits.\n+                queries_by_field = {}\n+                for qs in querysets:\n+                    field = qs.query.where.children[0].lhs.target if qs.query.where.children else None\n+                    queries_by_field.setdefault(field, []).append(qs)\n+                delete_batches = []\n+                for field_queries in queries_by_field.values():\n+                    for i, qs in enumerate(field_queries):\n+                        if i == len(delete_batches):\n+                            delete_batches.append(qs)\n+                        else:\n+                            delete_batches[i].query.where.add(\n+                                qs.query.where, 'OR')\n+                count = sum(\n+                    qs._raw_delete(using=self.using) for qs in delete_batches\n+                )\n+                deleted_counter[model._meta.label] += count\n \n             # update fields\n             for model, instances_for_fieldvalues in self.field_updates.items():\n",
+ "gate_passed": true,
+ "usage": {
+  "llm_calls": 46,
+  "steps": 46,
+  "input_tokens": 1058098,
+  "output_tokens": 3467,
+  "cache_read_tokens": 15104,
+  "cache_write_tokens": 0,
+  "prompt_tokens": 1073202,
+  "cost_usd": 0.107694,
+  "cost_cached_estimate_usd": 0.016492,
+  "cost_basis": "cached_estimate",
+  "usage_estimated_calls": 45,
+  "wall_s": 1322.45,
+  "paused_s": 0.0
+ },
+ "stats": {
+  "tool:search_code": 1,
+  "tool:read_file": 3,
+  "invalid_calls": 4,
+  "tool:write_file": 3,
+  "tool:bash": 25,
+  "tool:edit_file": 6,
+  "tool:report_reproduction": 1,
+  "idle_turns": 1,
+  "tool:submit_fix": 1,
+  "blocked_commands": 0,
+  "fix_rounds": 1
+ },
+ "model": "gpt-6-luna",
+ "provider": "openai",
+ "base_commit": "dc03057ff328a3152d565269537c3f17d374f9e5",
+ "trace_dir": "runs/mini50-gpt6-luna/traces/django__django-11885",
+ "approval_id": null,
+ "started_at": "2026-09-27T16:47:59+00:00",
+ "finished_at": "2026-09-27T17:10:01+00:00",
+ "patch_sha256": "1b5cff32039d8e2542a4b243318c30eee3a33d3061c922bd2a12ffac282fd6d8"
+}

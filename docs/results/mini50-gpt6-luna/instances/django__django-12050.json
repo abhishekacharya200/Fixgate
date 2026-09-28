@@ -1,0 +1,112 @@
+{
+ "task_id": "django__django-12050",
+ "issue": {
+  "repo": "django/django",
+  "title": "Query.resolve_lookup_value coerces value of type list to tuple",
+  "body": "Query.resolve_lookup_value coerces value of type list to tuple\nDescription\n\t\nChanges introduced in #30687 cause an input value list to be coerced to tuple breaking exact value queries. This affects ORM field types that are dependent on matching input types such as PickledField.\nThe expected iterable return type should match input iterable type.",
+  "number": null,
+  "url": null,
+  "labels": [],
+  "comments": [],
+  "author": null,
+  "ref": "django__django-12050"
+ },
+ "outcome": {
+  "category": "patch_ready",
+  "subcategory": "reproduced",
+  "phase": "verify",
+  "message": "Updated Query.resolve_lookup_value() to preserve the iterable type of list and tuple inputs while resolving nested expressions.",
+  "span_id": null,
+  "details": {
+   "warnings": []
+  },
+  "blame": "none"
+ },
+ "triage": {
+  "kind": "bug",
+  "actionable": true,
+  "needs_more_info": false,
+  "severity": "medium",
+  "component": "Database layer (ORM query resolution)",
+  "summary": "Query.resolve_lookup_value changes list values to tuples, causing exact lookups on type-sensitive fields to fail.",
+  "suggested_labels": [
+   "Database layer",
+   "Bug"
+  ],
+  "confidence": 0.98,
+  "evidence": "The issue reports that Query.resolve_lookup_value converts list inputs to tuples after #30687, breaking exact-value queries for fields such as PickledField; expected iterable type should match the input."
+ },
+ "reproduction": {
+  "status": "verified",
+  "command": "python /tmp/fixgate/repro.py",
+  "script": "from django.db.models.sql.query import Query\n\nquery = object.__new__(Query)\nactual = query.resolve_lookup_value([1, 2], set(), True, False)\nexpected = [1, 2]\nprint(\"actual:\", actual, type(actual))\nprint(\"expected:\", expected, type(expected))\nassert actual == expected and type(actual) is type(expected)\n",
+  "exit_code": 1,
+  "output": "actual: (1, 2) <class 'tuple'>\nexpected: [1, 2] <class 'list'>\nTraceback (most recent call last):\n  File \"/tmp/fixgate/repro.py\", line 8, in <module>\n    assert actual == expected and type(actual) is type(expected)\nAssertionError\n",
+  "explanation": "A list input resolves to tuple (1, 2), while the expected value is the same list; the script fails on its type assertion.",
+  "attempts": 1
+ },
+ "fix": {
+  "summary": "Updated Query.resolve_lookup_value() to preserve the iterable type of list and tuple inputs while resolving nested expressions.",
+  "root_cause": "The method always converted iterable inputs to tuple after resolving their members, changing type-sensitive list lookup values.",
+  "test_command": "./tests/runtests.py queries.test_query --parallel 1",
+  "round": 1
+ },
+ "verification": {
+  "passed": true,
+  "repro_after": {
+   "exit_code": 0,
+   "output": "actual: [1, 2] <class 'list'>\nexpected: [1, 2] <class 'list'>\n"
+  },
+  "tests": {
+   "command": "./tests/runtests.py queries.test_query --parallel 1",
+   "exit_code": 0,
+   "passed": true,
+   "failures": [],
+   "baseline_exit_code": null,
+   "baseline_failures": [],
+   "new_failures": [],
+   "verdict": "passed",
+   "output": "..........\n----------------------------------------------------------------------\nRan 10 tests in 0.002s\n\nOK\nTesting against Django installed in '/testbed/django'\nSystem check identified no issues (1 silenced).\n"
+  },
+  "policy_violations": [],
+  "problems": [],
+  "warnings": []
+ },
+ "patch": "diff --git a/django/db/models/sql/query.py b/django/db/models/sql/query.py\nindex ea51912e8b..90475d6fb9 100644\n--- a/django/db/models/sql/query.py\n+++ b/django/db/models/sql/query.py\n@@ -1073,7 +1073,7 @@ class Query(BaseExpression):\n                         ))\n                 else:\n                     resolved_values.append(sub_value)\n-            value = tuple(resolved_values)\n+            value = type(value)(resolved_values)\n         return value\n \n     def solve_lookup_type(self, lookup):\n",
+ "gate_passed": true,
+ "usage": {
+  "llm_calls": 10,
+  "steps": 10,
+  "input_tokens": 28993,
+  "output_tokens": 540,
+  "cache_read_tokens": 4864,
+  "cache_write_tokens": 0,
+  "prompt_tokens": 33857,
+  "cost_usd": 0.003218,
+  "cost_cached_estimate_usd": 0.00129,
+  "cost_basis": "cached_estimate",
+  "usage_estimated_calls": 9,
+  "wall_s": 170.3,
+  "paused_s": 0.0
+ },
+ "stats": {
+  "tool:search_code": 1,
+  "tool:read_file": 1,
+  "tool:write_file": 1,
+  "tool:bash": 2,
+  "tool:report_reproduction": 1,
+  "tool:edit_file": 1,
+  "idle_turns": 1,
+  "tool:submit_fix": 1,
+  "blocked_commands": 0,
+  "fix_rounds": 1
+ },
+ "model": "gpt-6-luna",
+ "provider": "openai",
+ "base_commit": "23dc82e2dbd7c4d6bdbc91aaf0293ab8b94224d2",
+ "trace_dir": "runs/mini50-gpt6-luna/traces/django__django-12050",
+ "approval_id": null,
+ "started_at": "2026-09-27T17:10:02+00:00",
+ "finished_at": "2026-09-27T17:12:52+00:00",
+ "patch_sha256": "08af6e22fa66b28c47c3cd61192637cdcf2fca544718dc4d48f8f01fb469e63f"
+}

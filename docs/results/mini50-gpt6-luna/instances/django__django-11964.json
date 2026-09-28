@@ -1,0 +1,113 @@
+{
+ "task_id": "django__django-11964",
+ "issue": {
+  "repo": "django/django",
+  "title": "The value of a TextChoices/IntegerChoices field has a differing type",
+  "body": "The value of a TextChoices/IntegerChoices field has a differing type\nDescription\n\t\nIf we create an instance of a model having a CharField or IntegerField with the keyword choices pointing to IntegerChoices or TextChoices, the value returned by the getter of the field will be of the same type as the one created by enum.Enum (enum value).\nFor example, this model:\nfrom django.db import models\nfrom django.utils.translation import gettext_lazy as _\nclass MyChoice(models.TextChoices):\n\tFIRST_CHOICE = \"first\", _(\"The first choice, it is\")\n\tSECOND_CHOICE = \"second\", _(\"The second choice, it is\")\nclass MyObject(models.Model):\n\tmy_str_value = models.CharField(max_length=10, choices=MyChoice.choices)\nThen this test:\nfrom django.test import TestCase\nfrom testing.pkg.models import MyObject, MyChoice\nclass EnumTest(TestCase):\n\tdef setUp(self) -> None:\n\t\tself.my_object = MyObject.objects.create(my_str_value=MyChoice.FIRST_CHOICE)\n\tdef test_created_object_is_str(self):\n\t\tmy_object = self.my_object\n\t\tself.assertIsInstance(my_object.my_str_value, str)\n\t\tself.assertEqual(str(my_object.my_str_value), \"first\")\n\tdef test_retrieved_object_is_str(self):\n\t\tmy_object = MyObject.objects.last()\n\t\tself.assertIsInstance(my_object.my_str_value, str)\n\t\tself.assertEqual(str(my_object.my_str_value), \"first\")\nAnd then the results:\n(django30-venv) \u279c django30 ./manage.py test\nCreating test database for alias 'default'...\nSystem check identified no issues (0 silenced).\nF.\n======================================================================\nFAIL: test_created_object_is_str (testing.tests.EnumTest)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n File \"/Users/mikailkocak/Development/django30/testing/tests.py\", line 14, in test_created_object_is_str\n\tself.assertEqual(str(my_object.my_str_value), \"first\")\nAssertionError: 'MyChoice.FIRST_CHOICE' != 'first'\n- MyChoice.FIRST_CHOICE\n+ first\n----------------------------------------------------------------------\nRan 2 tests in 0.002s\nFAILED (failures=1)\nWe notice when invoking __str__(...) we don't actually get the value property of the enum value which can lead to some unexpected issues, especially when communicating to an external API with a freshly created instance that will send MyEnum.MyValue, and the one that was retrieved would send my_value.",
+  "number": null,
+  "url": null,
+  "labels": [],
+  "comments": [],
+  "author": null,
+  "ref": "django__django-11964"
+ },
+ "outcome": {
+  "category": "patch_ready",
+  "subcategory": "reproduced",
+  "phase": "verify",
+  "message": "Defined Choices.__str__() to return the string form of its underlying value, so choice members stringify consistently with stored field values.",
+  "span_id": null,
+  "details": {
+   "warnings": []
+  },
+  "blame": "none"
+ },
+ "triage": {
+  "kind": "bug",
+  "actionable": true,
+  "needs_more_info": false,
+  "severity": "low",
+  "component": "Models / fields and enumeration choices",
+  "summary": "Fields initialized with TextChoices or IntegerChoices values expose the enum member on unsaved/newly created instances rather than a normalized field value, differing from fetched instances.",
+  "suggested_labels": [
+   "Models",
+   "Choices",
+   "bug"
+  ],
+  "confidence": 0.92,
+  "evidence": "A newly created instance retains MyChoice.FIRST_CHOICE, so str(my_object.my_str_value) yields 'MyChoice.FIRST_CHOICE'; after fetching, the value is 'first'."
+ },
+ "reproduction": {
+  "status": "verified",
+  "command": "python /tmp/fixgate/repro.py",
+  "script": "from django.conf import settings\nsettings.configure(INSTALLED_APPS=[], DATABASES={'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': ':memory:'}}, SECRET_KEY='x')\nimport django\ndjango.setup()\nfrom django.db import models\nclass Choice(models.TextChoices):\n    FIRST = 'first', 'First'\nclass Item(models.Model):\n    value = models.CharField(max_length=10, choices=Choice.choices)\n    class Meta:\n        app_label = 'repro'\nitem = Item(value=Choice.FIRST)\nactual = str(item.value)\nexpected = 'first'\nprint('actual:', actual, 'expected:', expected)\nassert actual == expected\n",
+  "exit_code": 1,
+  "output": "actual: Choice.FIRST expected: first\nTraceback (most recent call last):\n  File \"/tmp/fixgate/repro.py\", line 16, in <module>\n    assert actual == expected\nAssertionError\n",
+  "explanation": "A newly initialized CharField retains the TextChoices member; str(item.value) is 'Choice.FIRST' rather than the expected 'first'.",
+  "attempts": 1
+ },
+ "fix": {
+  "summary": "Defined Choices.__str__() to return the string form of its underlying value, so choice members stringify consistently with stored field values.",
+  "root_cause": "Enum's default string representation includes the enum class and member name. Newly assigned model fields retain the choice member, so stringifying the value differs from a value loaded from the database.",
+  "test_command": "./tests/runtests.py model_enums model_fields.test_charfield --parallel 1",
+  "round": 1
+ },
+ "verification": {
+  "passed": true,
+  "repro_after": {
+   "exit_code": 0,
+   "output": "actual: first expected: first\n"
+  },
+  "tests": {
+   "command": "./tests/runtests.py model_enums model_fields.test_charfield --parallel 1",
+   "exit_code": 0,
+   "passed": true,
+   "failures": [],
+   "baseline_exit_code": null,
+   "baseline_failures": [],
+   "new_failures": [],
+   "verdict": "passed",
+   "output": "Creating test database for alias 'default'...\n...........................\n----------------------------------------------------------------------\nRan 27 tests in 0.007s\n\nOK\nDestroying test database for alias 'default'...\nTesting against Django installed in '/testbed/django'\nSystem check identified no issues (0 silenced).\n"
+  },
+  "policy_violations": [],
+  "problems": [],
+  "warnings": []
+ },
+ "patch": "diff --git a/django/db/models/enums.py b/django/db/models/enums.py\nindex bbe362a6ab..1c73ab21b2 100755\n--- a/django/db/models/enums.py\n+++ b/django/db/models/enums.py\n@@ -60,7 +60,9 @@ class ChoicesMeta(enum.EnumMeta):\n \n class Choices(enum.Enum, metaclass=ChoicesMeta):\n     \"\"\"Class for creating enumerated choices.\"\"\"\n-    pass\n+\n+    def __str__(self):\n+        return str(self.value)\n \n \n class IntegerChoices(int, Choices):\n",
+ "gate_passed": true,
+ "usage": {
+  "llm_calls": 24,
+  "steps": 24,
+  "input_tokens": 172205,
+  "output_tokens": 1199,
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 0,
+  "prompt_tokens": 172205,
+  "cost_usd": 0.01782,
+  "cost_cached_estimate_usd": 0.003742,
+  "cost_basis": "cached_estimate",
+  "usage_estimated_calls": 24,
+  "wall_s": 545.41,
+  "paused_s": 0.0
+ },
+ "stats": {
+  "tool:bash": 13,
+  "tool:search_code": 1,
+  "invalid_calls": 4,
+  "tool:read_file": 1,
+  "tool:write_file": 1,
+  "tool:report_reproduction": 1,
+  "tool:edit_file": 1,
+  "tool:submit_fix": 1,
+  "blocked_commands": 0,
+  "fix_rounds": 1
+ },
+ "model": "gpt-6-luna",
+ "provider": "openai",
+ "base_commit": "c6870ee03817a1e2b8d93fe1fbf982bb586c71a0",
+ "trace_dir": "runs/mini50-gpt6-luna/traces/django__django-11964",
+ "approval_id": null,
+ "started_at": "2026-09-27T16:55:46+00:00",
+ "finished_at": "2026-09-27T17:04:50+00:00",
+ "patch_sha256": "1b282f0c024afff7d99826fb1ce710903764a63539b840ccd821c42b0fa041a6"
+}

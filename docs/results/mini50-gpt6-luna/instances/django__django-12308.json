@@ -1,0 +1,110 @@
+{
+ "task_id": "django__django-12308",
+ "issue": {
+  "repo": "django/django",
+  "title": "JSONField are not properly displayed in admin when they are readonly.",
+  "body": "JSONField are not properly displayed in admin when they are readonly.\nDescription\n\t\nJSONField values are displayed as dict when readonly in the admin.\nFor example, {\"foo\": \"bar\"} would be displayed as {'foo': 'bar'}, which is not valid JSON.\nI believe the fix would be to add a special case in django.contrib.admin.utils.display_for_field to call the prepare_value of the JSONField (not calling json.dumps directly to take care of the InvalidJSONInput case).",
+  "number": null,
+  "url": null,
+  "labels": [],
+  "comments": [],
+  "author": null,
+  "ref": "django__django-12308"
+ },
+ "outcome": {
+  "category": "patch_ready",
+  "subcategory": "reproduced",
+  "phase": "verify",
+  "message": "Render model JSONField values in admin using the JSON form field's prepare_value(), preserving valid JSON formatting and invalid-input handling.",
+  "span_id": null,
+  "details": {
+   "warnings": []
+  },
+  "blame": "none"
+ },
+ "triage": {
+  "kind": "bug",
+  "actionable": true,
+  "needs_more_info": false,
+  "severity": "low",
+  "component": "contrib.admin",
+  "summary": "Readonly JSONField values in the admin are rendered using Python dict formatting rather than valid JSON.",
+  "suggested_labels": [
+   "contrib.admin",
+   "Database layer"
+  ],
+  "confidence": 0.98,
+  "evidence": "The report states {\"foo\": \"bar\"} is displayed as {'foo': 'bar'}, and identifies display_for_field handling of JSONField as the likely fix."
+ },
+ "reproduction": {
+  "status": "verified",
+  "command": "python /tmp/fixgate/repro.py",
+  "script": "from django.contrib.admin.utils import display_for_field\nfrom django.db import models\n\nactual = display_for_field({'foo': 'bar'}, models.JSONField(), '-empty-')\nexpected = '{\"foo\": \"bar\"}'\nprint('actual:', actual)\nprint('expected:', expected)\nassert actual == expected\n",
+  "exit_code": 1,
+  "output": "actual: {'foo': 'bar'}\nexpected: {\"foo\": \"bar\"}\nTraceback (most recent call last):\n  File \"/tmp/fixgate/repro.py\", line 8, in <module>\n    assert actual == expected\nAssertionError\n",
+  "explanation": "Confirmed display_for_field returns Python repr {'foo': 'bar'} instead of valid JSON {\"foo\": \"bar\"}.",
+  "attempts": 1
+ },
+ "fix": {
+  "summary": "Render model JSONField values in admin using the JSON form field's prepare_value(), preserving valid JSON formatting and invalid-input handling.",
+  "root_cause": "display_for_field() fell through to display_for_value(), whose fallback uses Python str() and renders dicts with single quotes rather than JSON.",
+  "test_command": "./tests/runtests.py admin_utils.tests.UtilsTests --parallel 1",
+  "round": 1
+ },
+ "verification": {
+  "passed": true,
+  "repro_after": {
+   "exit_code": 0,
+   "output": "actual: {\"foo\": \"bar\"}\nexpected: {\"foo\": \"bar\"}\n"
+  },
+  "tests": {
+   "command": "./tests/runtests.py admin_utils.tests.UtilsTests --parallel 1",
+   "exit_code": 0,
+   "passed": true,
+   "failures": [],
+   "baseline_exit_code": null,
+   "baseline_failures": [],
+   "new_failures": [],
+   "verdict": "passed",
+   "output": "..............\n----------------------------------------------------------------------\nRan 14 tests in 0.026s\n\nOK\nTesting against Django installed in '/testbed/django'\nSystem check identified no issues (0 silenced).\n"
+  },
+  "policy_violations": [],
+  "problems": [],
+  "warnings": []
+ },
+ "patch": "diff --git a/django/contrib/admin/utils.py b/django/contrib/admin/utils.py\nindex e4ddc8f017..4c079d29db 100755\n--- a/django/contrib/admin/utils.py\n+++ b/django/contrib/admin/utils.py\n@@ -388,6 +388,8 @@ def display_for_field(value, field, empty_value_display):\n         return _boolean_icon(value)\n     elif value is None:\n         return empty_value_display\n+    elif isinstance(field, models.JSONField):\n+        return field.formfield().prepare_value(value)\n     elif isinstance(field, models.DateTimeField):\n         return formats.localize(timezone.template_localtime(value))\n     elif isinstance(field, (models.DateField, models.TimeField)):\n",
+ "gate_passed": true,
+ "usage": {
+  "llm_calls": 16,
+  "steps": 16,
+  "input_tokens": 169283,
+  "output_tokens": 791,
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 0,
+  "prompt_tokens": 169283,
+  "cost_usd": 0.017324,
+  "cost_cached_estimate_usd": 0.00366,
+  "cost_basis": "cached_estimate",
+  "usage_estimated_calls": 16,
+  "wall_s": 305.88,
+  "paused_s": 0.0
+ },
+ "stats": {
+  "tool:read_file": 3,
+  "tool:bash": 8,
+  "invalid_calls": 1,
+  "tool:report_reproduction": 1,
+  "tool:edit_file": 1,
+  "tool:submit_fix": 1,
+  "blocked_commands": 0,
+  "fix_rounds": 1
+ },
+ "model": "gpt-6-luna",
+ "provider": "openai",
+ "base_commit": "3aa0644cc3795983fb92c05b8007d7b08b83ad50",
+ "trace_dir": "runs/mini50-gpt6-luna/traces/django__django-12308",
+ "approval_id": null,
+ "started_at": "2026-09-27T17:39:41+00:00",
+ "finished_at": "2026-09-27T17:44:47+00:00",
+ "patch_sha256": "cf92de830cb599466a723d4c1eb49ef57d04da733187b62c0f1e4ec71180cfe0"
+}

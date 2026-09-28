@@ -1,0 +1,112 @@
+{
+ "task_id": "django__django-12304",
+ "issue": {
+  "repo": "django/django",
+  "title": "Enumeration Types are not usable in templates.",
+  "body": "Enumeration Types are not usable in templates.\nDescription\n\t \n\t\t(last modified by Mariusz Felisiak)\n\t \nThe new \u200benumeration types are great but can't be used in Django templates due to their being callable. For example this doesn't work:\n{% if student.year_in_school == YearInSchool.FRESHMAN %}\nThis is because YearInSchool, being a class, is callable, and Django Templates always call callables with no arguments. The call fails because the required value argument is missing.\nThe easy solution would be to declare do_not_call_in_templates = True on the various Choices classes.",
+  "number": null,
+  "url": null,
+  "labels": [],
+  "comments": [],
+  "author": null,
+  "ref": "django__django-12304"
+ },
+ "outcome": {
+  "category": "patch_ready",
+  "subcategory": "reproduced",
+  "phase": "verify",
+  "message": "Marked ChoicesMeta with do_not_call_in_templates so enum choice classes are not invoked during template resolution, while preserving their members and attributes.",
+  "span_id": null,
+  "details": {
+   "warnings": []
+  },
+  "blame": "none"
+ },
+ "triage": {
+  "kind": "bug",
+  "actionable": true,
+  "needs_more_info": false,
+  "severity": "low",
+  "component": "Templates / enum choices",
+  "summary": "Django templates cannot reference enumeration classes because template resolution calls them without required arguments.",
+  "suggested_labels": [
+   "bug",
+   "templates",
+   "model field choices"
+  ],
+  "confidence": 0.98,
+  "evidence": "Issue states that Choice enum classes are callable and Django templates attempt a zero-argument call, which fails because the required value argument is missing; proposes do_not_call_in_templates = True."
+ },
+ "reproduction": {
+  "status": "verified",
+  "command": "python /tmp/fixgate/repro.py",
+  "script": "from django.conf import settings\nsettings.configure(TEMPLATES=[{'BACKEND': 'django.template.backends.django.DjangoTemplates'}], INSTALLED_APPS=[])\nfrom django.db import models\nimport django\ndjango.setup()\nfrom django.template import Context, Template\n\nclass YearInSchool(models.TextChoices):\n    FRESHMAN = 'FR', 'Freshman'\n\nclass Student:\n    year_in_school = YearInSchool.FRESHMAN\n\nactual = Template('{% if student.year_in_school == YearInSchool.FRESHMAN %}yes{% else %}no{% endif %}').render(Context({'student': Student(), 'YearInSchool': YearInSchool}))\nexpected = 'yes'\nprint('actual:', repr(actual))\nprint('expected:', repr(expected))\nassert actual == expected\n",
+  "exit_code": 1,
+  "output": "actual: 'no'\nexpected: 'yes'\nTraceback (most recent call last):\n  File \"/tmp/fixgate/repro.py\", line 18, in <module>\n    assert actual == expected\nAssertionError\n",
+  "explanation": "Repro outputs actual 'no' instead of expected 'yes' because template resolution calls the enum class.",
+  "attempts": 1
+ },
+ "fix": {
+  "summary": "Marked ChoicesMeta with do_not_call_in_templates so enum choice classes are not invoked during template resolution, while preserving their members and attributes.",
+  "root_cause": "Django template variable resolution automatically invokes callable objects; enum choice classes are callable constructors and were invoked without the required value.",
+  "test_command": "./tests/runtests.py --parallel 1 model_fields.tests",
+  "round": 1
+ },
+ "verification": {
+  "passed": true,
+  "repro_after": {
+   "exit_code": 0,
+   "output": "actual: 'yes'\nexpected: 'yes'\n"
+  },
+  "tests": {
+   "command": "./tests/runtests.py --parallel 1 model_fields.tests",
+   "exit_code": 0,
+   "passed": true,
+   "failures": [],
+   "baseline_exit_code": null,
+   "baseline_failures": [],
+   "new_failures": [],
+   "verdict": "passed",
+   "output": "Creating test database for alias 'default'...\n...............................\n----------------------------------------------------------------------\nRan 31 tests in 0.016s\n\nOK\nDestroying test database for alias 'default'...\nTesting against Django installed in '/testbed/django'\nSystem check identified no issues (0 silenced).\n"
+  },
+  "policy_violations": [],
+  "problems": [],
+  "warnings": []
+ },
+ "patch": "diff --git a/django/db/models/enums.py b/django/db/models/enums.py\nindex f48143ddaf..642d84921c 100644\n--- a/django/db/models/enums.py\n+++ b/django/db/models/enums.py\n@@ -8,6 +8,8 @@ __all__ = ['Choices', 'IntegerChoices', 'TextChoices']\n class ChoicesMeta(enum.EnumMeta):\n     \"\"\"A metaclass for creating a enum choices.\"\"\"\n \n+    do_not_call_in_templates = True\n+\n     def __new__(metacls, classname, bases, classdict):\n         labels = []\n         for key in classdict._member_names:\n",
+ "gate_passed": true,
+ "usage": {
+  "llm_calls": 22,
+  "steps": 22,
+  "input_tokens": 125672,
+  "output_tokens": 1599,
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 0,
+  "prompt_tokens": 125672,
+  "cost_usd": 0.013367,
+  "cost_cached_estimate_usd": 0.002942,
+  "cost_basis": "cached_estimate",
+  "usage_estimated_calls": 22,
+  "wall_s": 631.76,
+  "paused_s": 0.0
+ },
+ "stats": {
+  "tool:search_code": 1,
+  "tool:read_file": 1,
+  "invalid_calls": 1,
+  "tool:bash": 11,
+  "tool:report_reproduction": 1,
+  "tool:edit_file": 5,
+  "tool:submit_fix": 1,
+  "blocked_commands": 0,
+  "fix_rounds": 1
+ },
+ "model": "gpt-6-luna",
+ "provider": "openai",
+ "base_commit": "600c280aeffd9b02adecfce49d19e2eaa6e996a7",
+ "trace_dir": "runs/mini50-gpt6-luna/traces/django__django-12304",
+ "approval_id": null,
+ "started_at": "2026-09-27T17:35:31+00:00",
+ "finished_at": "2026-09-27T17:46:02+00:00",
+ "patch_sha256": "36edcc3f2ffbce605ca63b8e1fba29b037ba4d61e8e46dfa43812a82ae48b9cf"
+}

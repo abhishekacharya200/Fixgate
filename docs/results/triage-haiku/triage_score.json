@@ -1,0 +1,62 @@
+{
+ "model": "claude-haiku-4-5-20251001",
+ "provider": "anthropic",
+ "n": 136,
+ "graded": 136,
+ "errors": 0,
+ "accuracy": 0.6985,
+ "macro_f1": 0.6825,
+ "per_kind": {
+  "bug": {
+   "n": 32,
+   "precision": 0.5357142857142857,
+   "recall": 0.9375,
+   "f1": 0.6818
+  },
+  "feature": {
+   "n": 40,
+   "precision": 0.8,
+   "recall": 0.8,
+   "f1": 0.8
+  },
+  "documentation": {
+   "n": 32,
+   "precision": 1.0,
+   "recall": 0.75,
+   "f1": 0.8571
+  },
+  "question": {
+   "n": 32,
+   "precision": 0.6428571428571429,
+   "recall": 0.28125,
+   "f1": 0.3913
+  }
+ },
+ "confusion": {
+  "bug": {
+   "bug": 30,
+   "feature": 2
+  },
+  "feature": {
+   "feature": 32,
+   "bug": 5,
+   "question": 3
+  },
+  "documentation": {
+   "bug": 4,
+   "documentation": 24,
+   "question": 2,
+   "feature": 2
+  },
+  "question": {
+   "invalid": 1,
+   "feature": 4,
+   "bug": 17,
+   "question": 9,
+   "other": 1
+  }
+ },
+ "bugs_sent_to_agent": 0.8438,
+ "questions_stopped": 0.5312,
+ "cost_per_issue_usd": 0.00411
+}

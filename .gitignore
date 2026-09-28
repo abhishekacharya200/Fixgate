@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+fixgate.toml
+# local benchmark working files (traces, harness logs); published results live in docs/results
+runs/
+# session resume notes, not part of the project
+HANDOFF.md
+# personal automation for the local benchmark machine
+scripts/finish_benchmark.sh

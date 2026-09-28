@@ -1,0 +1,111 @@
+{
+ "task_id": "django__django-11951",
+ "issue": {
+  "repo": "django/django",
+  "title": "bulk_create batch_size param overrides the compatible batch size calculation",
+  "body": "bulk_create batch_size param overrides the compatible batch size calculation\nDescription\n\t \n\t\t(last modified by Ahmet Kucuk)\n\t \nAt this line: \u200bhttps://github.com/django/django/blob/stable/2.2.x/django/db/models/query.py#L1197\nbatch_size param overrides compatible batch size calculation. This looks like a bug as bulk_update properly picks the minimum of two:\n\u200bhttps://github.com/django/django/blob/stable/2.2.x/django/db/models/query.py#L504\nI suggest using similar\n batch_size = min(batch_size, max_batch_size) if batch_size else max_batch_size\nlogic in bulk_create as well. I am happy to open a PR for it.",
+  "number": null,
+  "url": null,
+  "labels": [],
+  "comments": [],
+  "author": null,
+  "ref": "django__django-11951"
+ },
+ "outcome": {
+  "category": "patch_ready",
+  "subcategory": "reproduced",
+  "phase": "verify",
+  "message": "Cap bulk_create's requested batch_size at the backend-compatible maximum.",
+  "span_id": null,
+  "details": {
+   "warnings": []
+  },
+  "blame": "none"
+ },
+ "triage": {
+  "kind": "bug",
+  "actionable": true,
+  "needs_more_info": false,
+  "severity": "medium",
+  "component": "Database models / QuerySet.bulk_create",
+  "summary": "bulk_create should cap a caller-provided batch_size at the backend-compatible maximum instead of allowing it to override that limit.",
+  "suggested_labels": [
+   "Database layer",
+   "Bug"
+  ],
+  "confidence": 0.96,
+  "evidence": "Reporter says bulk_create's batch_size overrides the backend-compatible maximum batch size, unlike bulk_update which chooses the minimum; points to stable/2.2.x query.py."
+ },
+ "reproduction": {
+  "status": "verified",
+  "command": "python /tmp/fixgate/repro.py",
+  "script": "from django.conf import settings\nsettings.configure(\n    SECRET_KEY='x',\n    INSTALLED_APPS=[],\n    DATABASES={'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': ':memory:'}},\n)\nimport django\ndjango.setup()\nfrom django.db import connection, models\nclass Item(models.Model):\n    value = models.IntegerField()\n    class Meta:\n        app_label = 'repro'\nwith connection.schema_editor() as editor:\n    editor.create_model(Item)\nobjs = [Item(value=i) for i in range(501)]\ntry:\n    Item.objects.bulk_create(objs, batch_size=1000)\nexcept Exception as e:\n    actual = type(e).__name__ + ': ' + str(e)\nelse:\n    actual = Item.objects.count()\nexpected = 501\nprint('actual:', actual)\nprint('expected:', expected)\nassert actual == expected\n",
+  "exit_code": 1,
+  "output": "actual: OperationalError: too many terms in compound SELECT\nexpected: 501\nTraceback (most recent call last):\n  File \"/tmp/fixgate/repro.py\", line 26, in <module>\n    assert actual == expected\nAssertionError\n",
+  "explanation": "SQLite reports too many terms in compound SELECT for 501 rows with a requested batch_size of 1000; expected all 501 inserted rows.",
+  "attempts": 1
+ },
+ "fix": {
+  "summary": "Cap bulk_create's requested batch_size at the backend-compatible maximum.",
+  "root_cause": "The batching helper used the caller's batch_size directly whenever truthy, bypassing the database backend's maximum bulk batch size.",
+  "test_command": "./tests/runtests.py --parallel 1 bulk_create",
+  "round": 1
+ },
+ "verification": {
+  "passed": true,
+  "repro_after": {
+   "exit_code": 0,
+   "output": "actual: 501\nexpected: 501\n"
+  },
+  "tests": {
+   "command": "./tests/runtests.py --parallel 1 bulk_create",
+   "exit_code": 0,
+   "passed": true,
+   "failures": [],
+   "baseline_exit_code": null,
+   "baseline_failures": [],
+   "new_failures": [],
+   "verdict": "passed",
+   "output": "Creating test database for alias 'default'...\n........s...........sss..s\n----------------------------------------------------------------------\nRan 26 tests in 0.127s\n\nOK (skipped=5)\nDestroying test database for alias 'default'...\nTesting against Django installed in '/testbed/django'\nSystem check identified no issues (0 silenced).\n"
+  },
+  "policy_violations": [],
+  "problems": [],
+  "warnings": []
+ },
+ "patch": "diff --git a/django/db/models/query.py b/django/db/models/query.py\nindex 794e0faae7..92349cd0c5 100644\n--- a/django/db/models/query.py\n+++ b/django/db/models/query.py\n@@ -1209,7 +1209,8 @@ class QuerySet:\n         if ignore_conflicts and not connections[self.db].features.supports_ignore_conflicts:\n             raise NotSupportedError('This database backend does not support ignoring conflicts.')\n         ops = connections[self.db].ops\n-        batch_size = (batch_size or max(ops.bulk_batch_size(fields, objs), 1))\n+        max_batch_size = max(ops.bulk_batch_size(fields, objs), 1)\n+        batch_size = min(batch_size, max_batch_size) if batch_size else max_batch_size\n         inserted_rows = []\n         bulk_return = connections[self.db].features.can_return_rows_from_bulk_insert\n         for item in [objs[i:i + batch_size] for i in range(0, len(objs), batch_size)]:\n",
+ "gate_passed": true,
+ "usage": {
+  "llm_calls": 11,
+  "steps": 11,
+  "input_tokens": 75862,
+  "output_tokens": 690,
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 0,
+  "prompt_tokens": 75862,
+  "cost_usd": 0.007931,
+  "cost_cached_estimate_usd": 0.001968,
+  "cost_basis": "cached_estimate",
+  "usage_estimated_calls": 11,
+  "wall_s": 211.0,
+  "paused_s": 0.0
+ },
+ "stats": {
+  "tool:read_file": 2,
+  "invalid_calls": 1,
+  "tool:bash": 3,
+  "tool:write_file": 1,
+  "tool:report_reproduction": 1,
+  "tool:edit_file": 1,
+  "tool:submit_fix": 1,
+  "blocked_commands": 0,
+  "fix_rounds": 1
+ },
+ "model": "gpt-6-luna",
+ "provider": "openai",
+ "base_commit": "b7e2df8113d35d4fdcf27f15d846b7e02cf4ab8d",
+ "trace_dir": "runs/mini50-gpt6-luna/traces/django__django-11951",
+ "approval_id": null,
+ "started_at": "2026-09-27T16:52:14+00:00",
+ "finished_at": "2026-09-27T16:55:45+00:00",
+ "patch_sha256": "3cc0b623a4393acf23f2426804f91ba7a471b940d928d93b072d6163d0cffd86"
+}
